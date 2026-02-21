@@ -148,6 +148,14 @@ export const typingUpdateDataSchema = z.object({
   isTyping: z.boolean()
 });
 
+export const roomMemberUpdateDataSchema = z.object({
+  roomId: z.string().min(1),
+  userId: z.string().min(1),
+  action: z.enum(["added", "removed", "role_updated", "owner_transferred"]),
+  role: z.enum(["member", "admin", "owner"]).optional(),
+  actorUserId: z.string().min(1)
+});
+
 export const presenceUpdateDataSchema = z.object({
   userId: z.string().min(1),
   status: z.enum(["online", "offline"]),
@@ -194,6 +202,10 @@ export const serverEventSchema = z.discriminatedUnion("type", [
     data: typingUpdateDataSchema
   }),
   baseEnvelope.extend({
+    type: z.literal("room:member:update"),
+    data: roomMemberUpdateDataSchema
+  }),
+  baseEnvelope.extend({
     type: z.literal("presence:update"),
     data: presenceUpdateDataSchema
   }),
@@ -207,4 +219,3 @@ export type Cursor = z.infer<typeof cursorSchema>;
 export type ClientEvent = z.infer<typeof clientEventSchema>;
 export type ServerEvent = z.infer<typeof serverEventSchema>;
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
-
