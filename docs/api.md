@@ -12,6 +12,7 @@ This document provides a practical integration guide for BunRelay REST and WebSo
 - REST requests use `application/json`.
 - Protected REST endpoints require `Authorization: Bearer <accessToken>`.
 - WS authentication is event-based (`auth:hello`) after connecting to `/ws`.
+- Optional incoming correlation headers: `x-request-id` (echoed back) and `traceparent` (W3C trace context).
 
 ## Seed Data (default local)
 
@@ -45,6 +46,11 @@ Response:
   "ts": 1730000000000
 }
 ```
+
+Response headers include:
+
+- `x-request-id`
+- `traceparent` (when tracing is enabled)
 
 ### Login
 
@@ -163,6 +169,217 @@ Response:
 }
 ```
 
+### Create or Get DM Room (Authenticated)
+
+`POST /rooms/dm`
+
+Request:
+
+```json
+{
+  "peerUserId": "user_bob"
+}
+```
+
+Responses:
+
+- `201` when a DM is created
+- `200` when the DM already exists (idempotent)
+
+Body:
+
+```json
+{
+  "room": {
+    "id": "room_dm_user_alice_user_bob",
+    "name": null,
+    "type": "dm"
+  },
+  "created": true
+}
+```
+
+### Create Group Room (Authenticated)
+
+`POST /rooms/groups`
+
+Request:
+
+```json
+{
+  "name": "Project Ops",
+  "memberIds": ["user_bob", "user_carlos"]
+}
+```
+
+Notes:
+
+- Creator is always included automatically in the group.
+- Creator role is `owner`; other members are `member`.
+- `memberIds` are deduplicated server-side.
+
+Response (`201`):
+
+```json
+{
+  "room": {
+    "id": "room_group_u82ksp7k3p9f",
+    "name": "Project Ops",
+    "type": "group"
+  },
+  "memberIds": ["user_alice", "user_bob", "user_carlos"],
+  "created": true
+}
+```
+
+### Add Group Member (Authenticated)
+
+`POST /rooms/:roomId/members`
+
+Request:
+
+```json
+{
+  "userId": "user_diana"
+}
+```
+
+Notes:
+
+- Room `owner` or `admin` can add members.
+- Only `group` rooms support membership management.
+- Idempotent: returns `200` with `added: false` if user is already a member.
+- Successful changes emit WS `room:member:update` to online room participants.
+
+Responses:
+
+- `201` when member is added
+- `200` when member already exists
+
+Body:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "userId": "user_diana",
+  "added": true
+}
+```
+
+### Remove Group Member (Authenticated)
+
+`DELETE /rooms/:roomId/members/:userId`
+
+Notes:
+
+- Room `owner` or `admin` can remove members.
+- Only `group` rooms support membership management.
+- The last admin cannot be removed.
+- The room owner cannot be removed.
+- Idempotent: returns `200` with `removed: false` when target user is not a member.
+- Successful changes emit WS `room:member:update` to online room participants (including removed user).
+
+Body:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "userId": "user_diana",
+  "removed": true
+}
+```
+
+### Update Group Member Role (Authenticated)
+
+`PATCH /rooms/:roomId/members/:userId/role`
+
+Request:
+
+```json
+{
+  "role": "admin"
+}
+```
+
+Notes:
+
+- Room `owner` or `admin` can change roles.
+- Only `group` rooms support membership management.
+- Cannot demote the last admin.
+- Owner role cannot be changed through this endpoint.
+- Idempotent: returns `200` with `changed: false` when role is already the same.
+- Successful changes emit WS `room:member:update` to online room participants.
+
+Body:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "userId": "user_bob",
+  "role": "admin",
+  "changed": true
+}
+```
+
+### Transfer Group Ownership (Authenticated)
+
+`PATCH /rooms/:roomId/owner`
+
+Request:
+
+```json
+{
+  "userId": "user_bob"
+}
+```
+
+Notes:
+
+- Only current `owner` can transfer ownership.
+- Target user must already be a member of the room.
+- Only `group` rooms support ownership transfer.
+- On success, previous owner becomes `admin`.
+- Successful changes emit WS `room:member:update` with action `owner_transferred`.
+
+Body:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "previousOwner": "user_alice",
+  "newOwner": "user_bob"
+}
+```
+
+### Room Audit Log (Authenticated)
+
+`GET /rooms/:roomId/audit?limit=50&offset=0`
+
+Notes:
+
+- Room `owner` or `admin` can read audit entries.
+- Default: `limit=50`, `offset=0`.
+- `limit` max is `100`.
+
+Response:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "entries": [
+    {
+      "id": "audit_x7abc1234def",
+      "roomId": "room_group_u82ksp7k3p9f",
+      "actorUserId": "user_alice",
+      "action": "owner_transferred",
+      "targetUserId": "user_bob",
+      "metadata": null,
+      "ts": 1730000000900
+    }
+  ]
+}
+```
+
 ## Metrics Endpoints
 
 ### JSON snapshot
@@ -241,6 +458,7 @@ All messages use an envelope:
 - `msg:delivered`
 - `msg:read`
 - `typing:update`
+- `room:member:update`
 - `presence:update`
 - `error`
 
@@ -373,6 +591,30 @@ Heartbeat ping:
 }
 ```
 
+Room membership update push (server -> client):
+
+```json
+{
+  "type": "room:member:update",
+  "id": "evt_membership_1",
+  "ts": 1730000000800,
+  "data": {
+    "roomId": "room_general",
+    "userId": "user_bob",
+    "action": "owner_transferred",
+    "role": "owner",
+    "actorUserId": "user_alice"
+  }
+}
+```
+
+`room:member:update` actions:
+
+- `added`
+- `removed`
+- `role_updated`
+- `owner_transferred`
+
 ## Operational Limits and Defaults
 
 - REST max body bytes: `HTTP_MAX_BODY_BYTES` (default `16384`)
@@ -381,6 +623,56 @@ Heartbeat ping:
 - WS auth timeout: `WS_AUTH_TIMEOUT_MS` (default `5000`)
 - WS heartbeat timeout: `WS_HEARTBEAT_TIMEOUT_MS` (default `45000`)
 - Max message chars: `MESSAGE_MAX_CHARS` (default `4000`)
+
+## Multi-Instance Delivery (Optional)
+
+- Set `REDIS_URL` to enable Redis Pub/Sub fanout.
+- Without `REDIS_URL`, server runs in local-only delivery mode.
+- WS room and presence broadcasts are propagated across instances when Redis is enabled.
+
+## Advanced Observability Integrations
+
+### Distributed tracing backend (OTLP/HTTP)
+
+Enable:
+
+- `TRACING_ENABLED=true`
+- `TRACING_OTLP_HTTP_URL=http://localhost:4318/v1/traces`
+
+Optional:
+
+- `TRACING_OTLP_HEADERS=Authorization=Bearer <token>`
+- `TRACING_SAMPLING_RATIO=1`
+- `TRACING_EXPORT_BATCH_SIZE=64`
+- `TRACING_EXPORT_INTERVAL_MS=5000`
+- `TRACING_EXPORT_TIMEOUT_MS=2500`
+
+Behavior:
+
+- HTTP requests create server spans.
+- WS lifecycle/events create spans tied to connection context.
+- W3C `traceparent` is accepted on inbound HTTP and propagated on outbound HTTP responses.
+- Export is best-effort and non-blocking (app keeps running if backend is unavailable).
+
+### External log sinks
+
+Enable:
+
+- `LOG_SINK_HTTP_URLS=https://logs.example.com/ingest`
+
+Optional:
+
+- `LOG_SINK_HTTP_HEADERS=Authorization=Bearer <token>`
+- `LOG_SINK_BATCH_SIZE=100`
+- `LOG_SINK_FLUSH_INTERVAL_MS=2000`
+- `LOG_SINK_TIMEOUT_MS=2500`
+- `LOG_SINK_BUFFER_MAX=2000`
+
+Behavior:
+
+- Logs continue to stdout/stderr as primary sink.
+- Same structured records are also queued and pushed to configured external HTTP sinks.
+- Delivery is best-effort, batched and asynchronous.
 
 ## End-to-End Curl Example
 
