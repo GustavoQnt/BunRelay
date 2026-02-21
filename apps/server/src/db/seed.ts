@@ -45,31 +45,32 @@ async function seedRoomsAndMembers() {
         id: room.id,
         name: room.name,
         type: room.type,
+        createdBy: room.type === "group" ? "user_alice" : null,
         createdAt: now
       })
       .onConflictDoNothing();
   }
 
-  const memberships = [
-    ["room_general", "user_alice"],
-    ["room_general", "user_bob"],
-    ["room_general", "user_carlos"],
-    ["room_general", "user_diana"],
-    ["room_general", "user_erin"],
-    ["room_random", "user_alice"],
-    ["room_random", "user_bob"],
-    ["room_random", "user_carlos"],
-    ["room_alice_bob", "user_alice"],
-    ["room_alice_bob", "user_bob"]
-  ] as const;
+  const memberships: [string, string, string][] = [
+    ["room_general", "user_alice", "owner"],
+    ["room_general", "user_bob", "member"],
+    ["room_general", "user_carlos", "member"],
+    ["room_general", "user_diana", "member"],
+    ["room_general", "user_erin", "member"],
+    ["room_random", "user_alice", "owner"],
+    ["room_random", "user_bob", "member"],
+    ["room_random", "user_carlos", "member"],
+    ["room_alice_bob", "user_alice", "member"],
+    ["room_alice_bob", "user_bob", "member"]
+  ];
 
-  for (const [roomId, userId] of memberships) {
+  for (const [roomId, userId, role] of memberships) {
     await db
       .insert(roomMembers)
       .values({
         roomId,
         userId,
-        role: "member",
+        role,
         joinedAt: now
       })
       .onConflictDoNothing();

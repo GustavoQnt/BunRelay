@@ -54,6 +54,7 @@ export const rooms = pgTable("rooms", {
   id: text("id").primaryKey(),
   name: text("name"),
   type: text("type").notNull(),
+  createdBy: text("created_by").references(() => users.id),
   createdAt: bigint("created_at", { mode: "number" }).notNull()
 });
 
@@ -66,7 +67,7 @@ export const roomMembers = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role").notNull(),
+    role: text("role").notNull(), // member | admin | owner
     joinedAt: bigint("joined_at", { mode: "number" }).notNull()
   },
   (table) => ({
@@ -125,6 +126,26 @@ export const readCursors = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.roomId, table.userId] })
+  })
+);
+
+export const roomAuditLog = pgTable(
+  "room_audit_log",
+  {
+    id: text("id").primaryKey(),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    targetUserId: text("target_user_id").references(() => users.id, { onDelete: "cascade" }),
+    metadata: text("metadata"),
+    ts: bigint("ts", { mode: "number" }).notNull()
+  },
+  (table) => ({
+    roomTsIdx: index("room_audit_log_room_ts_idx").on(table.roomId, table.ts)
   })
 );
 

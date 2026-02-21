@@ -54,6 +54,7 @@ export const rooms = sqliteTable("rooms", {
   id: text("id").primaryKey(),
   name: text("name"),
   type: text("type", { enum: ["dm", "group"] }).notNull(),
+  createdBy: text("created_by").references(() => users.id),
   createdAt: integer("created_at", { mode: "number" }).notNull()
 });
 
@@ -66,7 +67,7 @@ export const roomMembers = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["member", "admin"] }).notNull(),
+    role: text("role", { enum: ["member", "admin", "owner"] }).notNull(),
     joinedAt: integer("joined_at", { mode: "number" }).notNull()
   },
   (table) => ({
@@ -125,6 +126,26 @@ export const readCursors = sqliteTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.roomId, table.userId] })
+  })
+);
+
+export const roomAuditLog = sqliteTable(
+  "room_audit_log",
+  {
+    id: text("id").primaryKey(),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    targetUserId: text("target_user_id").references(() => users.id, { onDelete: "cascade" }),
+    metadata: text("metadata"),
+    ts: integer("ts", { mode: "number" }).notNull()
+  },
+  (table) => ({
+    roomTsIdx: index("room_audit_log_room_ts_idx").on(table.roomId, table.ts)
   })
 );
 

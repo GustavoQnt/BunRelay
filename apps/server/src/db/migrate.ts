@@ -84,6 +84,21 @@ CREATE TABLE IF NOT EXISTS read_cursors (
   FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS room_audit_log (
+  id TEXT PRIMARY KEY NOT NULL,
+  room_id TEXT NOT NULL,
+  actor_user_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_user_id TEXT,
+  metadata TEXT,
+  ts INTEGER NOT NULL,
+  FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS room_audit_log_room_ts_idx ON room_audit_log(room_id, ts);
 `;
 
 const POSTGRES_MIGRATION_SQL = `
@@ -169,6 +184,29 @@ CREATE TABLE IF NOT EXISTS read_cursors (
   FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS room_audit_log (
+  id TEXT PRIMARY KEY NOT NULL,
+  room_id TEXT NOT NULL,
+  actor_user_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_user_id TEXT,
+  metadata TEXT,
+  ts BIGINT NOT NULL,
+  FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS room_audit_log_room_ts_idx ON room_audit_log(room_id, ts);
+`;
+
+const SQLITE_ALTER_SQL = `
+ALTER TABLE rooms ADD COLUMN created_by TEXT REFERENCES users(id);
+`;
+
+const POSTGRES_ALTER_SQL = `
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS created_by TEXT REFERENCES users(id);
 `;
 
 export async function runMigrations() {
@@ -177,6 +215,12 @@ export async function runMigrations() {
       throw new Error("sqlite client not initialized");
     }
     sqlite.exec(SQLITE_MIGRATION_SQL);
+    // SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so catch error if column exists
+    try {
+      sqlite.exec(SQLITE_ALTER_SQL);
+    } catch {
+      // column already exists
+    }
     return;
   }
 
@@ -185,6 +229,7 @@ export async function runMigrations() {
       throw new Error("postgres client not initialized");
     }
     await pg.unsafe(POSTGRES_MIGRATION_SQL);
+    await pg.unsafe(POSTGRES_ALTER_SQL);
     return;
   }
 
