@@ -1,4 +1,6 @@
 import { env } from "./env.ts";
+import { currentObservabilityContext } from "../services/observability/context.ts";
+import { emitToExternalLogSinks } from "../services/observability/log-sink.ts";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 type LogFields = Record<string, unknown>;
@@ -19,12 +21,21 @@ function writeLog(level: LogLevel, event: string, fields?: LogFields): void {
     return;
   }
 
+  const ctx = currentObservabilityContext();
   const payload = {
     ts: new Date().toISOString(),
     level,
     event,
+    requestId: ctx?.requestId,
+    traceId: ctx?.traceId,
+    spanId: ctx?.spanId,
+    parentSpanId: ctx?.parentSpanId,
+    connectionId: ctx?.connectionId,
+    userId: ctx?.userId,
     ...fields
   };
+
+  emitToExternalLogSinks(payload);
 
   const line = JSON.stringify(payload);
   if (level === "error") {
@@ -52,4 +63,3 @@ export const logger = {
     writeLog("error", event, fields);
   }
 };
-
