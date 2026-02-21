@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+apps/server/data
+apps/server/apps/server/data
+

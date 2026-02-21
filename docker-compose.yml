@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bunrelay
+      POSTGRES_USER: bunrelay
+      POSTGRES_PASSWORD: bunrelay
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bunrelay -d bunrelay"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DB_DRIVER: postgres
+      DB_URL: postgres://bunrelay:bunrelay@postgres:5432/bunrelay
+      JWT_SECRET: dev-secret-change-me-at-least-32-characters
+    command: sh -c "bun run db:migrate && bun run db:seed && bun run start"
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+
