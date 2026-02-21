@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BunRelay Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", sans-serif;
+        background: #f5f7fb;
+        color: #1b2333;
+      }
+      .app {
+        max-width: 980px;
+        margin: 24px auto;
+        padding: 0 16px;
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(23, 30, 48, 0.08);
+        padding: 16px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 10px 12px;
+        border: 1px solid #d4dbec;
+        border-radius: 8px;
+      }
+      button {
+        cursor: pointer;
+        background: #0b63f3;
+        color: #fff;
+        border-color: #0b63f3;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      #messages {
+        display: grid;
+        gap: 8px;
+        max-height: 360px;
+        overflow: auto;
+        padding: 8px;
+        border: 1px solid #e4e8f4;
+        border-radius: 8px;
+        background: #f9fbff;
+      }
+      .line {
+        padding: 8px 10px;
+        background: #eef4ff;
+        border-radius: 8px;
+      }
+      .muted {
+        color: #5d6d8b;
+        font-size: 12px;
+      }
+      code {
+        background: #edf1fc;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="card">
+        <h1>BunRelay Demo</h1>
+        <p class="muted">Usuarios seed: senha padrao <code>password123</code></p>
+        <div class="row">
+          <select id="username">
+            <option value="alice">alice</option>
+            <option value="bob">bob</option>
+            <option value="carlos">carlos</option>
+            <option value="diana">diana</option>
+            <option value="erin">erin</option>
+          </select>
+          <input id="password" value="password123" />
+          <button id="loginBtn">Login</button>
+          <span id="status" class="muted">desconectado</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <input id="roomId" value="room_general" />
+          <button id="joinBtn" disabled>Entrar na sala</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div id="messages"></div>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <input id="messageInput" placeholder="Digite uma mensagem..." style="flex: 1; min-width: 260px" />
+          <button id="sendBtn" disabled>Enviar</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const usernameEl = document.getElementById("username");
+      const passwordEl = document.getElementById("password");
+      const loginBtn = document.getElementById("loginBtn");
+      const joinBtn = document.getElementById("joinBtn");
+      const roomIdEl = document.getElementById("roomId");
+      const sendBtn = document.getElementById("sendBtn");
+      const messageInput = document.getElementById("messageInput");
+      const messagesEl = document.getElementById("messages");
+
+      let accessToken = "";
+      let ws = null;
+      let userId = "";
+      let joinedRoom = "";
+      const seenMessages = new Set();
+
+      const deviceId = localStorage.getItem("bunrelay_device_id") || crypto.randomUUID();
+      localStorage.setItem("bunrelay_device_id", deviceId);
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function appendMessage(text) {
+        const line = document.createElement("div");
+        line.className = "line";
+        line.textContent = text;
+        messagesEl.appendChild(line);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function send(type, data) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(
+          JSON.stringify({
+            type,
+            id: "evt_" + crypto.randomUUID().slice(0, 12),
+            ts: Date.now(),
+            data
+          })
+        );
+      }
+
+      loginBtn.onclick = async () => {
+        loginBtn.disabled = true;
+        setStatus("fazendo login...");
+        try {
+          const response = await fetch("/auth/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: usernameEl.value,
+              password: passwordEl.value,
+              deviceId
+            })
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload?.error?.message || "login failed");
+          }
+
+          accessToken = payload.accessToken;
+          userId = payload.user.id;
+          connectWs();
+        } catch (error) {
+          setStatus("erro no login");
+          appendMessage("erro: " + error.message);
+          loginBtn.disabled = false;
+        }
+      };
+
+      function connectWs() {
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+        ws.onopen = () => {
+          send("auth:hello", { token: accessToken, deviceId });
+        };
+
+        ws.onmessage = (event) => {
+          const packet = JSON.parse(event.data);
+          const { type, data } = packet;
+
+          if (type === "auth:ok") {
+            setStatus(`conectado como ${data.userId}/${data.deviceId}`);
+            joinBtn.disabled = false;
+            sendBtn.disabled = false;
+            loginBtn.disabled = true;
+            return;
+          }
+
+          if (type === "room:snapshot") {
+            joinedRoom = data.roomId;
+            appendMessage(`[snapshot ${data.roomId}] ${data.messages.length} mensagens`);
+            for (const msg of data.messages) {
+              if (seenMessages.has(msg.messageId)) continue;
+              seenMessages.add(msg.messageId);
+              appendMessage(`${msg.senderId}: ${msg.content}`);
+            }
+            return;
+          }
+
+          if (type === "msg:new") {
+            if (seenMessages.has(data.messageId)) return;
+            seenMessages.add(data.messageId);
+            appendMessage(`${data.senderId}: ${data.content}`);
+
+            if (joinedRoom === data.roomId) {
+              send("msg:delivered", { roomId: data.roomId, messageId: data.messageId });
+            }
+            return;
+          }
+
+          if (type === "msg:ack_server") {
+            appendMessage(`[ack] ${data.messageId}`);
+            return;
+          }
+
+          if (type === "error" || type === "auth:error") {
+            appendMessage(`[${type}] ${data.code}: ${data.message}`);
+            return;
+          }
+        };
+
+        ws.onclose = () => {
+          setStatus("ws fechado");
+          joinBtn.disabled = true;
+          sendBtn.disabled = true;
+          loginBtn.disabled = false;
+        };
+      }
+
+      joinBtn.onclick = () => {
+        send("room:join", { roomId: roomIdEl.value });
+      };
+
+      sendBtn.onclick = () => {
+        const content = messageInput.value.trim();
+        if (!content || !joinedRoom) return;
+        send("msg:send", {
+          roomId: joinedRoom,
+          messageId: "msg_" + crypto.randomUUID().slice(0, 12),
+          content
+        });
+        messageInput.value = "";
+      };
+
+      setInterval(() => {
+        send("presence:ping", {});
+      }, 30000);
+    </script>
+  </body>
+</html>
+
