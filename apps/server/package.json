@@ -1,0 +1,26 @@
+{
+  "name": "@bunrelay/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "db:migrate": "bun src/db/migrate.ts",
+    "db:seed": "bun src/db/seed.ts",
+    "typecheck": "bun x tsc -p tsconfig.json --noEmit",
+    "test": "bun test src/__tests__/e2e src/auth/__tests__ --timeout 30000"
+  },
+  "dependencies": {
+    "@bunrelay/shared": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "jose": "^6.1.0",
+    "nanoid": "^5.1.6",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.9.2"
+  }
+}
