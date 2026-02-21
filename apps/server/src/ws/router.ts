@@ -5,31 +5,20 @@ import type { ClientEvent } from "@bunrelay/shared";
 import { verifyAccessToken } from "../auth/jwt.ts";
 import { env } from "../config/env.ts";
 import { db } from "../db/index.ts";
-import { roomMembers, sessions } from "../db/schema.ts";
+import { sessions } from "../db/schema.ts";
 import { markDelivered, persistMessage, upsertReadCursor } from "../services/message.ts";
 import { isUserOnline, markOnline } from "../services/presence.ts";
 import { getRoomSnapshot, isRoomMember, roomExists } from "../services/room.ts";
 import { setTyping } from "../services/typing.ts";
-import { socketsForUsers } from "./connections.ts";
 import { sendError, sendEvent } from "./events.ts";
-import { broadcastPresenceToJoinedRoom, sendPresenceSnapshotForMembers } from "./presence.ts";
+import { broadcastToRoom, broadcastPresenceToJoinedRoom } from "./broadcast.ts";
+import { sendPresenceSnapshotForMembers } from "./presence.ts";
 import type { ServerSocket } from "./types.ts";
 
 type RouterContext = {
   onAuthenticated: (socket: ServerSocket) => void;
   resetHeartbeat: (socket: ServerSocket) => void;
 };
-
-async function roomMemberIds(roomId: string): Promise<string[]> {
-  const members = await db
-    .select({
-      userId: roomMembers.userId
-    })
-    .from(roomMembers)
-    .where(eq(roomMembers.roomId, roomId));
-
-  return members.map((member: any) => member.userId);
-}
 
 function requireAuth(socket: ServerSocket, refId: string): boolean {
   if (socket.data.authed) {
@@ -170,10 +159,7 @@ async function handleMsgSend(socket: ServerSocket, event: Extract<ClientEvent, {
 
   if (persisted.isNew) {
     const { isNew: _, ...msg } = persisted;
-    const recipients = await roomMemberIds(event.data.roomId);
-    for (const peer of socketsForUsers(recipients)) {
-      sendEvent(peer, "msg:new", msg);
-    }
+    await broadcastToRoom(event.data.roomId, "msg:new", msg);
   }
 }
 
@@ -201,10 +187,7 @@ async function handleMsgDelivered(socket: ServerSocket, event: Extract<ClientEve
     return;
   }
 
-  const recipients = await roomMemberIds(event.data.roomId);
-  for (const peer of socketsForUsers(recipients)) {
-    sendEvent(peer, "msg:delivered", delivered);
-  }
+  await broadcastToRoom(event.data.roomId, "msg:delivered", delivered);
 }
 
 async function handleMsgRead(socket: ServerSocket, event: Extract<ClientEvent, { type: "msg:read" }>) {
@@ -222,10 +205,7 @@ async function handleMsgRead(socket: ServerSocket, event: Extract<ClientEvent, {
     cursor: event.data.cursor
   });
 
-  const recipients = await roomMemberIds(event.data.roomId);
-  for (const peer of socketsForUsers(recipients)) {
-    sendEvent(peer, "msg:read", readCursor);
-  }
+  await broadcastToRoom(event.data.roomId, "msg:read", readCursor);
 }
 
 async function handleTypingSet(socket: ServerSocket, event: Extract<ClientEvent, { type: "typing:set" }>) {
@@ -238,10 +218,7 @@ async function handleTypingSet(socket: ServerSocket, event: Extract<ClientEvent,
   }
 
   const update = setTyping(event.data.roomId, socket.data.userId!, event.data.isTyping);
-  const recipients = await roomMemberIds(event.data.roomId);
-  for (const peer of socketsForUsers(recipients)) {
-    sendEvent(peer, "typing:update", update);
-  }
+  await broadcastToRoom(event.data.roomId, "typing:update", update);
 }
 
 function handlePresencePing(socket: ServerSocket, event: Extract<ClientEvent, { type: "presence:ping" }>, ctx: RouterContext) {

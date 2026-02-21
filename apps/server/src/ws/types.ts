@@ -5,6 +5,8 @@ export type RateLimitState = {
 
 export type ConnectionData = {
   connectionId: string;
+  requestId?: string;
+  traceparent?: string;
   ip: string;
   authed: boolean;
   userId?: string;
