@@ -5,7 +5,6 @@ WORKDIR /app
 COPY package.json tsconfig.base.json ./
 COPY apps/server/package.json apps/server/package.json
 COPY packages/shared/package.json packages/shared/package.json
-COPY bun.lock bun.lock
 
 RUN bun install
 
