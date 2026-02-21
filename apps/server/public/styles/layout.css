@@ -1,0 +1,163 @@
+.conn-status {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 80;
+  transform: translateY(-100%);
+  padding: 8px 12px;
+  text-align: center;
+  font: 600 12px var(--font-mono);
+  transition: transform 180ms ease;
+}
+
+.conn-status.show {
+  transform: translateY(0);
+}
+
+.conn-status.reconnecting {
+  background: rgba(242, 175, 74, 0.2);
+  color: var(--warn);
+}
+
+.conn-status.disconnected {
+  background: rgba(239, 95, 110, 0.2);
+  color: var(--danger);
+}
+
+.toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 120;
+  display: grid;
+  gap: 8px;
+}
+
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr 340px;
+}
+
+.sidebar {
+  background: rgba(13, 22, 36, 0.92);
+  border-right: 1px solid var(--border-soft);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  min-width: 0;
+}
+
+.sidebar-header {
+  padding: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sidebar-rooms {
+  overflow: auto;
+  padding: 10px;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--border-soft);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.main-pane {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+}
+
+.chat-header {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(13, 22, 36, 0.7);
+}
+
+.chat-empty,
+.chat-body {
+  min-height: 0;
+}
+
+.chat-empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  font: 600 14px var(--font-mono);
+}
+
+.chat-body {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  min-height: 0;
+}
+
+.messages {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.drawer {
+  border-left: 1px solid var(--border-soft);
+  background: rgba(13, 22, 36, 0.92);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+}
+
+.drawer-panels {
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.drawer-panel {
+  position: absolute;
+  inset: 0;
+  padding: 14px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 7, 12, 0.78);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+}
+
+.login-card {
+  width: min(440px, calc(100vw - 24px));
+  background: linear-gradient(155deg, rgba(18, 28, 44, 0.95), rgba(13, 20, 32, 0.95));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 12, 0.7);
+  display: grid;
+  place-items: center;
+  z-index: 300;
+}

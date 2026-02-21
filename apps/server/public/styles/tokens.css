@@ -1,0 +1,21 @@
+:root {
+  --bg-0: #090d14;
+  --bg-1: #111826;
+  --bg-2: #172234;
+  --bg-3: #20304b;
+  --border: #2b3950;
+  --border-soft: #1d293d;
+  --text-0: #ebf1ff;
+  --text-1: #a2b2cc;
+  --text-2: #6f7f99;
+  --brand: #2ad4a8;
+  --brand-2: #0ea17f;
+  --warn: #f2af4a;
+  --danger: #ef5f6e;
+  --ok: #32d583;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 20px 48px rgba(0, 0, 0, 0.32);
+  --font-sans: "DM Sans", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
