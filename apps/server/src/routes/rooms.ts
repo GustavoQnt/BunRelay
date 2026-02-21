@@ -9,6 +9,7 @@ import {
   getRoomSnapshot,
   isRoomMember,
   listRoomsForUser,
+  listRoomMembersWithProfile,
   removeMemberFromRoom,
   roomExists,
   transferOwnership,
@@ -89,11 +90,13 @@ export async function handleRoomsRoute(request: Request, url: URL): Promise<Resp
   const isCreateDm = request.method === "POST" && url.pathname === "/rooms/dm";
   const isCreateGroup = request.method === "POST" && url.pathname === "/rooms/groups";
   const roomMembersRoomId = request.method === "POST" ? parseRoomMembersPath(url.pathname) : null;
+  const roomMembersListRoomId = request.method === "GET" ? parseRoomMembersPath(url.pathname) : null;
   const roomMemberTarget = request.method === "DELETE" ? parseRoomMemberPath(url.pathname) : null;
   const roomMemberRoleTarget = request.method === "PATCH" ? parseRoomMemberRolePath(url.pathname) : null;
   const ownerTransferRoomId = request.method === "PATCH" ? parseRoomOwnerPath(url.pathname) : null;
   const auditRoomId = request.method === "GET" ? parseRoomAuditPath(url.pathname) : null;
   const isAddGroupMember = Boolean(roomMembersRoomId);
+  const isListRoomMembers = Boolean(roomMembersListRoomId);
   const isRemoveGroupMember = Boolean(roomMemberTarget);
   const isUpdateGroupMemberRole = Boolean(roomMemberRoleTarget);
   const isOwnerTransfer = Boolean(ownerTransferRoomId);
@@ -105,6 +108,7 @@ export async function handleRoomsRoute(request: Request, url: URL): Promise<Resp
     !isCreateDm &&
     !isCreateGroup &&
     !isAddGroupMember &&
+    !isListRoomMembers &&
     !isRemoveGroupMember &&
     !isUpdateGroupMemberRole &&
     !isOwnerTransfer &&
@@ -167,6 +171,40 @@ export async function handleRoomsRoute(request: Request, url: URL): Promise<Resp
       },
       created.created ? 201 : 200
     );
+  }
+
+  if (isListRoomMembers) {
+    const room = await getRoomById(roomMembersListRoomId!);
+    if (!room) {
+      return json(
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "room not found"
+          }
+        },
+        404
+      );
+    }
+
+    const member = await isRoomMember(auth.auth.userId, roomMembersListRoomId!);
+    if (!member) {
+      return json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "not a room member"
+          }
+        },
+        403
+      );
+    }
+
+    const members = await listRoomMembersWithProfile(roomMembersListRoomId!);
+    return json({
+      roomId: roomMembersListRoomId,
+      members
+    });
   }
 
   if (isCreateGroup) {

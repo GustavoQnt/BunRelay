@@ -102,6 +102,37 @@ async function authHeaders(username: string) {
   };
 }
 
+describe("GET /rooms/:id/members", () => {
+  it("returns 401 without auth", async () => {
+    const res = await fetch(`${baseUrl}/rooms/${groupRoomId}/members`);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when requester is not a room member", async () => {
+    const res = await fetch(`${baseUrl}/rooms/${groupRoomId}/members`, {
+      headers: await authHeaders(userDiana.username)
+    });
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as any;
+    expect(body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("returns room members with roles for members of the room", async () => {
+    const res = await fetch(`${baseUrl}/rooms/${groupRoomId}/members`, {
+      headers: await authHeaders(userAdmin.username)
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    expect(body.roomId).toBe(groupRoomId);
+    expect(Array.isArray(body.members)).toBe(true);
+    expect(body.members.some((m: any) => m.userId === userAdmin.id && m.role === "admin")).toBe(true);
+    expect(body.members.some((m: any) => m.userId === userBob.id && m.role === "member")).toBe(true);
+  });
+});
+
 describe("POST /rooms/:id/members", () => {
   it("returns 401 without auth", async () => {
     const res = await fetch(`${baseUrl}/rooms/${groupRoomId}/members`, {
