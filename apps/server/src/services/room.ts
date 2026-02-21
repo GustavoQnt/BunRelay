@@ -148,6 +148,31 @@ export async function getRoomMember(roomId: string, userId: string): Promise<Roo
   };
 }
 
+export async function listRoomMembersWithProfile(roomId: string): Promise<
+  Array<{
+    userId: string;
+    displayName: string;
+    role: "member" | "admin" | "owner";
+  }>
+> {
+  const members = await db
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      role: roomMembers.role
+    })
+    .from(roomMembers)
+    .innerJoin(users, eq(roomMembers.userId, users.id))
+    .where(eq(roomMembers.roomId, roomId))
+    .orderBy(asc(users.displayName));
+
+  return members as Array<{
+    userId: string;
+    displayName: string;
+    role: "member" | "admin" | "owner";
+  }>;
+}
+
 export async function addMemberToRoom(params: {
   roomId: string;
   userId: string;

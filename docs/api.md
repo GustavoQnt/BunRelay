@@ -232,6 +232,36 @@ Response (`201`):
 }
 ```
 
+### List Room Members (Authenticated)
+
+`GET /rooms/:roomId/members`
+
+Notes:
+
+- Requires authenticated user to be a member of the room.
+- Works for both `group` and `dm` rooms.
+- Returns member profile + governance role for frontend permission-aware rendering.
+
+Response:
+
+```json
+{
+  "roomId": "room_group_u82ksp7k3p9f",
+  "members": [
+    {
+      "userId": "user_alice",
+      "displayName": "Alice",
+      "role": "owner"
+    },
+    {
+      "userId": "user_bob",
+      "displayName": "Bob",
+      "role": "member"
+    }
+  ]
+}
+```
+
 ### Add Group Member (Authenticated)
 
 `POST /rooms/:roomId/members`
