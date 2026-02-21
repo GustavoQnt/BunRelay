@@ -13,6 +13,10 @@
     "start": "bun run --cwd apps/server start",
     "typecheck": "bun run --cwd apps/server typecheck && bun x tsc -p packages/shared/tsconfig.json --noEmit",
     "test": "bun run --cwd apps/server test",
+    "test:ui-smoke": "node scripts/ui-smoke.mjs",
     "ci": "bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
   }
 }

@@ -175,6 +175,7 @@ Copy-Item .env.example .env
 | `bun run db:seed` | `bun run --cwd apps/server db:seed` | load demo users/rooms |
 | `bun run typecheck` | root + shared typecheck | static type validation |
 | `bun run test` | `bun run --cwd apps/server test` | auth + e2e tests |
+| `bun run test:ui-smoke` | `node scripts/ui-smoke.mjs` | browser smoke (login, DM/group create, member governance, audit) |
 | `bun run ci` | `typecheck + test` | local CI equivalent |
 
 ### API and Protocol
