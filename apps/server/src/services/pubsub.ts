@@ -17,6 +17,27 @@ let redisSubscriber: any = null;
 let enabled = false;
 const handlers = new Map<string, MessageHandler>();
 
+function redactCredentialsInUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.username && !parsed.password) {
+      return rawUrl;
+    }
+
+    parsed.username = "***";
+    parsed.password = parsed.password ? "***" : "";
+    return parsed.toString();
+  } catch {
+    const schemeIdx = rawUrl.indexOf("://");
+    const atIdx = rawUrl.lastIndexOf("@");
+    if (schemeIdx < 0 || atIdx < 0 || atIdx <= schemeIdx + 3) {
+      return rawUrl;
+    }
+
+    return `${rawUrl.slice(0, schemeIdx + 3)}***@${rawUrl.slice(atIdx + 1)}`;
+  }
+}
+
 export function getNodeId(): string {
   return nodeId;
 }
@@ -49,7 +70,7 @@ export async function initPubSub(redisUrl?: string): Promise<void> {
     await redisSubscriber.connect();
 
     enabled = true;
-    logger.info("pubsub.redis_connected", { nodeId, redisUrl: redisUrl.replace(/\/\/.*@/, "//***@") });
+    logger.info("pubsub.redis_connected", { nodeId, redisUrl: redactCredentialsInUrl(redisUrl) });
   } catch (error) {
     logger.error("pubsub.init_failed", {
       error: error instanceof Error ? error.message : String(error)

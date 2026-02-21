@@ -16,16 +16,16 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c5346a40e688f7e3f790473554a8d14345ecc8 # v3.7.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750cb0f21818dd2f3c4096c188cb7509f0d39 # v3.12.0
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd1214345372a289060788ebfb30e6e947f6 # v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -33,7 +33,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@318604b002643fc95f4b672f11eb7c5a81885452 # v5.9.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/bunrelay
           tags: |
@@ -43,7 +43,7 @@ jobs:
             type=sha,format=short
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e6812c3d71ee403dd1e0bb3225 # v6.18.0
         with:
           context: .
           file: apps/server/Dockerfile
@@ -52,4 +52,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-

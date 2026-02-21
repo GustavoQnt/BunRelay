@@ -1,11 +1,16 @@
 .git
 .github
 .claude
+.env
+.env.*
+!.env.example
 node_modules
 **/node_modules
 **/dist
 **/coverage
 **/*.log
+**/*.pem
+**/*.key
+**/*secret*
 apps/server/data
 apps/server/apps/server/data
-

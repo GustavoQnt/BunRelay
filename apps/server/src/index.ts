@@ -15,6 +15,27 @@ import type { ConnectionData } from "./ws/types.ts";
 
 const PUBLIC_ROOT = new URL("../public/", import.meta.url);
 
+function redactCredentialsInUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.username && !parsed.password) {
+      return rawUrl;
+    }
+
+    parsed.username = "***";
+    parsed.password = parsed.password ? "***" : "";
+    return parsed.toString();
+  } catch {
+    const schemeIdx = rawUrl.indexOf("://");
+    const atIdx = rawUrl.lastIndexOf("@");
+    if (schemeIdx < 0 || atIdx < 0 || atIdx <= schemeIdx + 3) {
+      return rawUrl;
+    }
+
+    return `${rawUrl.slice(0, schemeIdx + 3)}***@${rawUrl.slice(atIdx + 1)}`;
+  }
+}
+
 function clientIp(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
 }
@@ -221,7 +242,7 @@ if (import.meta.main) {
     host: server.hostname,
     port: server.port,
     dbDriver: env.DB_DRIVER,
-    redisUrl: env.REDIS_URL ? env.REDIS_URL.replace(/\/\/.*@/, "//***@") : null,
+    redisUrl: env.REDIS_URL ? redactCredentialsInUrl(env.REDIS_URL) : null,
     tracingEnabled: tracingEnabled(),
     tracingBackend: env.TRACING_OTLP_HTTP_URL ?? null,
     externalLogSinks: env.LOG_SINK_HTTP_URLS ?? null

@@ -345,7 +345,10 @@ function shouldSample(parent?: TraceParent | null): boolean {
   if (parent) {
     return parent.sampled;
   }
-  return Math.random() < env.TRACING_SAMPLING_RATIO;
+
+  const sample = new Uint32Array(1);
+  crypto.getRandomValues(sample);
+  return sample[0]! / 0x1_0000_0000 < env.TRACING_SAMPLING_RATIO;
 }
 
 function pickTraceParent(parentTraceparent?: string): TraceParent | null {
