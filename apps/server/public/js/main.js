@@ -24,6 +24,7 @@ import { renderRoomList } from "./ui/sidebar.js";
 import { showToast } from "./ui/toast.js";
 import { addSystemMessage, renderChat, renderMessages, renderTyping } from "./ui/chat.js";
 import { displayName, roomLabel } from "./util/format.js";
+import { EMOJI_SHORTLIST } from "./util/emoji.js";
 import { normalizeUserId, parseCsvUsers } from "./util/normalize.js";
 
 let wsClient = null;
@@ -33,6 +34,12 @@ let typingTimer = null;
 let typingActive = false;
 let refreshPromise = null;
 let authRecoveryInProgress = false;
+let roomSyncTimerId = null;
+let roomSyncPromise = null;
+let resizeTimer = null;
+let isCompactViewport = window.matchMedia("(max-width: 1040px)").matches;
+
+const ROOM_SYNC_INTERVAL_MS = 4_000;
 
 function setConnStatus(status, text = "") {
   els.connStatus.className = "conn-status";
@@ -124,6 +131,92 @@ configureApiAuth({
   refreshSession
 });
 
+function stopRoomSyncLoop() {
+  if (roomSyncTimerId) {
+    clearInterval(roomSyncTimerId);
+    roomSyncTimerId = null;
+  }
+}
+
+function startRoomSyncLoop() {
+  stopRoomSyncLoop();
+  roomSyncTimerId = setInterval(() => {
+    void syncRooms().catch(() => {});
+  }, ROOM_SYNC_INTERVAL_MS);
+}
+
+function normalizeRoomMembershipAfterSync(serverIds) {
+  const serverSet = new Set(serverIds);
+
+  for (const roomId of [...state.rooms.keys()]) {
+    if (!serverSet.has(roomId)) {
+      state.rooms.delete(roomId);
+      if (state.activeRoomId === roomId) {
+        state.activeRoomId = "";
+      }
+    }
+  }
+}
+
+async function syncRooms(options = {}) {
+  if (!state.auth.accessToken) {
+    return { added: [], removed: [] };
+  }
+
+  if (roomSyncPromise) {
+    return roomSyncPromise;
+  }
+
+  roomSyncPromise = (async () => {
+    try {
+      const data = await listRooms();
+      const incomingRooms = data.rooms || [];
+      const incomingIds = incomingRooms.map((room) => room.id);
+      const previousIds = [...state.rooms.keys()];
+      const activeBeforeSync = state.activeRoomId;
+
+      const added = [];
+      for (const room of incomingRooms) {
+        const existed = state.rooms.has(room.id);
+        const local = ensureRoom(room);
+        if (!existed) {
+          local.lastActivityTs = Date.now();
+          added.push(room.id);
+        }
+      }
+
+      for (const roomId of added) {
+        void hydrateRoomMembers(roomId);
+      }
+
+      normalizeRoomMembershipAfterSync(incomingIds);
+      const removed = previousIds.filter((id) => !incomingIds.includes(id));
+
+      if (!state.activeRoomId && state.rooms.size > 0) {
+        const first = [...state.rooms.values()][0];
+        state.activeRoomId = first.id;
+      }
+
+      const removedActive = removed.includes(activeBeforeSync);
+      const roomSetChanged = added.length > 0 || removed.length > 0;
+
+      if (options.focusRoomId && state.rooms.has(options.focusRoomId)) {
+        switchRoom(options.focusRoomId);
+      } else if (roomSetChanged || removedActive) {
+        renderAll();
+      } else {
+        renderRoomList(state, switchRoom);
+      }
+
+      return { added, removed };
+    } finally {
+      roomSyncPromise = null;
+    }
+  })();
+
+  return roomSyncPromise;
+}
+
 function renderAll() {
   renderRoomList(state, switchRoom);
   renderChat(state);
@@ -158,6 +251,8 @@ function switchRoom(roomId, options = {}) {
 
   state.activeRoomId = roomId;
   room.unread = 0;
+  state.emoji.reactionPickerMessageId = "";
+  setComposerEmojiOpen(false);
 
   state.drawer.auditEntries = [];
   state.drawer.auditOffset = 0;
@@ -178,6 +273,10 @@ function switchRoom(roomId, options = {}) {
   }
 
   markRoomRead(room);
+  if (isCompactViewport) {
+    state.drawer.open = false;
+    renderDrawer(state);
+  }
   els.messageInput.focus();
 }
 
@@ -230,11 +329,7 @@ function markRoomRead(room) {
 }
 
 async function loadRoomsAfterLogin() {
-  const data = await listRooms();
-  for (const room of data.rooms || []) {
-    ensureRoom(room);
-  }
-
+  await syncRooms();
   selectFirstRoomIfAvailable();
   renderAll();
 }
@@ -247,11 +342,18 @@ function resetUiForLogout() {
 }
 
 function upsertMessage(room, payload) {
+  const reactionMap = buildReactionMap(payload.reactions);
   const existing = room.messages.find((msg) => msg.messageId === payload.messageId);
   if (existing) {
     existing.ts = payload.ts;
     existing.content = payload.content;
     existing.senderId = payload.senderId;
+    if (payload.reactions) {
+      existing.reactions = reactionMap;
+    } else if (!(existing.reactions instanceof Map)) {
+      existing.reactions = buildReactionMap(existing.reactions);
+    }
+    room.lastActivityTs = Math.max(room.lastActivityTs || 0, Number(payload.ts) || Date.now());
     return existing;
   }
 
@@ -260,7 +362,8 @@ function upsertMessage(room, payload) {
     messageId: payload.messageId,
     senderId: payload.senderId,
     content: payload.content,
-    ts: payload.ts
+    ts: payload.ts,
+    reactions: reactionMap
   };
 
   room.messages.push(clone);
@@ -268,9 +371,41 @@ function upsertMessage(room, payload) {
     if (a.ts !== b.ts) return a.ts - b.ts;
     return (a.messageId || "").localeCompare(b.messageId || "");
   });
+  room.lastActivityTs = Math.max(room.lastActivityTs || 0, Number(payload.ts) || Date.now());
 
   state.seenMessageIds.add(payload.messageId);
   return clone;
+}
+
+function buildReactionMap(reactions) {
+  const map = new Map();
+  const source = Array.isArray(reactions) ? reactions : [];
+
+  for (const reaction of source) {
+    if (!reaction?.emoji || !reaction?.userId) {
+      continue;
+    }
+
+    if (!map.has(reaction.emoji)) {
+      map.set(reaction.emoji, new Set());
+    }
+
+    map.get(reaction.emoji).add(reaction.userId);
+  }
+
+  return map;
+}
+
+function messageReactionUsers(message, emoji) {
+  if (!(message.reactions instanceof Map)) {
+    message.reactions = buildReactionMap(message.reactions);
+  }
+
+  if (!message.reactions.has(emoji)) {
+    message.reactions.set(emoji, new Set());
+  }
+
+  return message.reactions.get(emoji);
 }
 
 function handleRoomSnapshot(data) {
@@ -290,6 +425,11 @@ function handleRoomSnapshot(data) {
   for (const message of data.messages || []) {
     upsertMessage(room, message);
     wsSend("msg:delivered", { roomId: data.roomId, messageId: message.messageId });
+  }
+
+  const latestMessageTs = (data.messages || []).reduce((max, msg) => Math.max(max, Number(msg.ts) || 0), 0);
+  if (latestMessageTs > 0) {
+    room.lastActivityTs = Math.max(room.lastActivityTs || 0, latestMessageTs);
   }
 
   applyPresenceForRoom(room);
@@ -326,6 +466,32 @@ function handleNewMessage(data) {
   }
 }
 
+function handleReactionUpdate(data) {
+  const room = state.rooms.get(data.roomId);
+  if (!room) {
+    return;
+  }
+
+  const message = room.messages.find((item) => item.messageId === data.messageId);
+  if (!message) {
+    return;
+  }
+
+  const users = messageReactionUsers(message, data.emoji);
+  if (data.active) {
+    users.add(data.userId);
+  } else {
+    users.delete(data.userId);
+    if (users.size === 0) {
+      message.reactions.delete(data.emoji);
+    }
+  }
+
+  if (state.activeRoomId === data.roomId) {
+    renderMessages(state);
+  }
+}
+
 function compareCursor(message, cursor) {
   if (message.ts < cursor.ts) return true;
   if (message.ts > cursor.ts) return false;
@@ -357,21 +523,31 @@ function applyMemberRole(room, userId, role) {
 }
 
 function handleMemberUpdate(data) {
+  const existed = state.rooms.has(data.roomId);
   const room = ensureRoom({ id: data.roomId });
   const actor = displayName(data.actorUserId);
   const user = displayName(data.userId);
+  const isCurrentUserTarget = data.userId === state.auth.user?.id;
+  const shouldShowGroupSystemMessage = room.type === "group" && Boolean(room.name);
 
   if (data.action === "added") {
     const exists = room.members.some((m) => m.userId === data.userId);
     if (!exists) {
       room.members.push({ userId: data.userId, displayName: user, role: data.role || "member" });
     }
-    addSystemMessage(state, room.id, `${actor} adicionou ${user}`);
+    room.removed = false;
+    room.lastActivityTs = Date.now();
+    if (shouldShowGroupSystemMessage) {
+      addSystemMessage(state, room.id, `${actor} adicionou ${user}`);
+    }
   }
 
   if (data.action === "removed") {
     room.members = room.members.filter((m) => m.userId !== data.userId);
-    addSystemMessage(state, room.id, `${actor} removeu ${user}`);
+    room.lastActivityTs = Date.now();
+    if (shouldShowGroupSystemMessage) {
+      addSystemMessage(state, room.id, `${actor} removeu ${user}`);
+    }
 
     if (data.userId === state.auth.user?.id) {
       room.removed = true;
@@ -381,17 +557,27 @@ function handleMemberUpdate(data) {
 
   if (data.action === "role_updated") {
     applyMemberRole(room, data.userId, data.role || "member");
-    addSystemMessage(state, room.id, `${actor} alterou papel de ${user} para ${data.role || "member"}`);
+    room.lastActivityTs = Date.now();
+    if (shouldShowGroupSystemMessage) {
+      addSystemMessage(state, room.id, `${actor} alterou papel de ${user} para ${data.role || "member"}`);
+    }
   }
 
   if (data.action === "owner_transferred") {
     applyMemberRole(room, data.actorUserId, "admin");
     applyMemberRole(room, data.userId, "owner");
-    addSystemMessage(state, room.id, `${actor} transferiu ownership para ${user}`);
+    room.lastActivityTs = Date.now();
+    if (shouldShowGroupSystemMessage) {
+      addSystemMessage(state, room.id, `${actor} transferiu ownership para ${user}`);
+    }
   }
 
   applyPresenceForRoom(room);
   renderAll();
+
+  if (!existed || (data.action === "added" && isCurrentUserTarget)) {
+    void syncRooms().catch(() => {});
+  }
 }
 
 async function recoverFromAuthFailure() {
@@ -417,6 +603,8 @@ const routeWsEvent = createEventRouter({
     wsAuthed = true;
     wsClient?.markAuthed();
     startHeartbeat();
+    startRoomSyncLoop();
+    void syncRooms().catch(() => {});
 
     if (state.activeRoomId) {
       ensureRoomJoined(state.activeRoomId);
@@ -436,6 +624,7 @@ const routeWsEvent = createEventRouter({
     if (state.activeRoomId) renderMessages(state);
   },
   onMsgNew: handleNewMessage,
+  onReactionUpdate: handleReactionUpdate,
   onMsgDelivered: (data) => {
     if (data.userId !== state.auth.user?.id) {
       state.messageStatus.set(data.messageId, "entregue");
@@ -506,6 +695,7 @@ function connectWs() {
 
 function closeWs() {
   stopHeartbeat();
+  stopRoomSyncLoop();
   wsAuthed = false;
   if (wsClient) {
     wsClient.disconnect();
@@ -532,6 +722,7 @@ async function submitLogin(event) {
 
     showApp(data.user);
     await loadRoomsAfterLogin();
+    startRoomSyncLoop();
     connectWs();
   } catch (error) {
     showLoginError(getApiErrorMessage(error, "Falha no login"));
@@ -544,8 +735,95 @@ function logout() {
   closeWs();
   clearAuth();
   resetRuntimeState();
+  setComposerEmojiOpen(false);
   resetUiForLogout();
   showLogin();
+}
+
+function renderComposerEmojiPicker() {
+  els.composerEmojiPicker.innerHTML = "";
+  for (const emoji of EMOJI_SHORTLIST) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "emoji-option";
+    button.dataset.action = "composer-emoji";
+    button.dataset.emoji = emoji;
+    button.textContent = emoji;
+    els.composerEmojiPicker.appendChild(button);
+  }
+}
+
+function setComposerEmojiOpen(open) {
+  state.emoji.composerOpen = open;
+  els.composerEmojiBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  els.composerEmojiPicker.classList.toggle("hidden", !open);
+}
+
+function insertEmojiInComposer(emoji) {
+  const input = els.messageInput;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const before = input.value.slice(0, start);
+  const after = input.value.slice(end);
+
+  input.value = `${before}${emoji}${after}`;
+  const cursor = start + emoji.length;
+  input.setSelectionRange(cursor, cursor);
+  input.focus();
+  onComposerInput();
+}
+
+function sendReaction(roomId, messageId, emoji, active) {
+  const sent = wsSend("reaction:set", { roomId, messageId, emoji, active });
+  if (!sent) {
+    showToast("Conexao indisponivel para reagir", "warn");
+  }
+}
+
+function handleReactionClick(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) {
+    return;
+  }
+
+  const room = state.rooms.get(state.activeRoomId);
+  if (!room || room.removed) {
+    return;
+  }
+
+  const action = button.dataset.action;
+  const messageId = button.dataset.messageId;
+  const emoji = button.dataset.emoji;
+  if (!messageId) {
+    return;
+  }
+
+  if (action === "open-reaction-picker") {
+    state.emoji.reactionPickerMessageId = state.emoji.reactionPickerMessageId === messageId ? "" : messageId;
+    renderMessages(state);
+    return;
+  }
+
+  if (!emoji) {
+    return;
+  }
+
+  if (action === "pick-reaction") {
+    state.emoji.reactionPickerMessageId = "";
+    renderMessages(state);
+    sendReaction(room.id, messageId, emoji, true);
+    return;
+  }
+
+  if (action === "toggle-reaction") {
+    const message = room.messages.find((item) => item.messageId === messageId);
+    if (!message) {
+      return;
+    }
+    const users = messageReactionUsers(message, emoji);
+    const hasReaction = users.has(state.auth.user?.id || "");
+    sendReaction(room.id, messageId, emoji, !hasReaction);
+  }
 }
 
 function sendMessage() {
@@ -588,6 +866,7 @@ function sendMessage() {
   }
 
   els.messageInput.value = "";
+  setComposerEmojiOpen(false);
   els.messageInput.focus();
 }
 
@@ -626,6 +905,7 @@ async function openCreateDmFlow() {
       close();
       showToast(data.created ? "DM criado" : "DM ja existente", "info");
       switchRoom(room.id);
+      void syncRooms().catch(() => {});
     } catch (error) {
       showToast(getApiErrorMessage(error, "Falha ao criar DM"), "error", 4500);
     }
@@ -656,6 +936,7 @@ async function openCreateGroupFlow() {
       close();
       showToast("Grupo criado", "info");
       switchRoom(room.id);
+      void syncRooms().catch(() => {});
     } catch (error) {
       showToast(getApiErrorMessage(error, "Falha ao criar grupo"), "error", 4500);
     }
@@ -817,8 +1098,32 @@ async function loadAudit(reset = false) {
   }
 }
 
+function handleViewportResize() {
+  const compactNow = window.matchMedia("(max-width: 1040px)").matches;
+  if (compactNow === isCompactViewport) {
+    return;
+  }
+
+  isCompactViewport = compactNow;
+  if (!compactNow) {
+    state.drawer.open = true;
+  } else {
+    state.drawer.open = false;
+  }
+  renderDrawer(state);
+}
+
+function onWindowResize() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    handleViewportResize();
+    renderChat(state);
+  }, 120);
+}
+
 function setupUiEvents() {
   els.deviceIdInput.value = state.auth.deviceId;
+  renderComposerEmojiPicker();
 
   els.loginForm.addEventListener("submit", submitLogin);
   els.logoutBtn.addEventListener("click", logout);
@@ -864,11 +1169,60 @@ function setupUiEvents() {
     sendMessage();
   });
 
+  els.composerEmojiBtn.addEventListener("click", () => {
+    setComposerEmojiOpen(!state.emoji.composerOpen);
+  });
+
+  els.composerEmojiPicker.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action='composer-emoji']");
+    if (!button) {
+      return;
+    }
+
+    const emoji = button.dataset.emoji;
+    if (!emoji) {
+      return;
+    }
+
+    insertEmojiInComposer(emoji);
+    setComposerEmojiOpen(false);
+  });
+
+  els.messages.addEventListener("click", handleReactionClick);
   els.messageInput.addEventListener("input", onComposerInput);
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    if (!event.target.closest("#composer")) {
+      setComposerEmojiOpen(false);
+    }
+
+    if (
+      state.emoji.reactionPickerMessageId &&
+      !event.target.closest(".reaction-picker") &&
+      !event.target.closest("button[data-action='open-reaction-picker']")
+    ) {
+      state.emoji.reactionPickerMessageId = "";
+      if (state.activeRoomId) {
+        renderMessages(state);
+      }
+    }
+  });
+
+  window.addEventListener("resize", onWindowResize);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.auth.accessToken) {
+      void syncRooms().catch(() => {});
+    }
+  });
 }
 
 function start() {
   setupUiEvents();
+  handleViewportResize();
   renderAll();
   showLogin();
   setConnStatus("hidden");

@@ -9,7 +9,8 @@ function createRoom(seed) {
     unread: 0,
     joined: false,
     removed: false,
-    cursor: null
+    cursor: null,
+    lastActivityTs: 0
   };
 }
 
@@ -35,6 +36,10 @@ export const state = {
   presence: new Map(),
   messageStatus: new Map(),
   seenMessageIds: new Set(),
+  emoji: {
+    composerOpen: false,
+    reactionPickerMessageId: ""
+  },
   drawer: {
     open: true,
     tab: "members",
@@ -62,6 +67,8 @@ export function resetRuntimeState() {
   state.presence.clear();
   state.messageStatus.clear();
   state.seenMessageIds.clear();
+  state.emoji.composerOpen = false;
+  state.emoji.reactionPickerMessageId = "";
   state.drawer.open = true;
   state.drawer.tab = "members";
   state.drawer.auditEntries = [];
