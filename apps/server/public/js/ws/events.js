@@ -20,6 +20,9 @@ export function createEventRouter(handlers) {
       case "msg:new":
         handlers.onMsgNew?.(event.data, event);
         return;
+      case "reaction:update":
+        handlers.onReactionUpdate?.(event.data, event);
+        return;
       case "msg:delivered":
         handlers.onMsgDelivered?.(event.data, event);
         return;
