@@ -100,6 +100,23 @@ describe("msg:send happy path", () => {
     bob.close();
     carlos.close();
   });
+
+  it("supports unicode emoji payload end-to-end", async () => {
+    const alice = await joinedClient("alice", "room_general", "dev-a-emoji");
+    const bob = await joinedClient("bob", "room_general", "dev-b-emoji");
+
+    const msgId = `msg_emoji_${nanoid(8)}`;
+    const content = "bom dia ☀️🚀🔥";
+    alice.send("msg:send", { roomId: "room_general", messageId: msgId, content });
+
+    await alice.expect("msg:ack_server");
+    const msg = await bob.expect("msg:new");
+    expect((msg.data as any).messageId).toBe(msgId);
+    expect((msg.data as any).content).toBe(content);
+
+    alice.close();
+    bob.close();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -125,6 +142,65 @@ describe("msg:send idempotency", () => {
     // bob should NOT receive a second msg:new
     const noDuplicate = await bob.expectNoEvent("msg:new", 1000);
     expect(noDuplicate).toBe(true);
+
+    alice.close();
+    bob.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
+describe("reaction:set", () => {
+  it("adds and removes reactions with room fanout", async () => {
+    const alice = await joinedClient("alice", "room_general", "dev-react-a1");
+    const bob = await joinedClient("bob", "room_general", "dev-react-b1");
+
+    const msgId = `msg_react_${nanoid(8)}`;
+    alice.send("msg:send", { roomId: "room_general", messageId: msgId, content: "react here" });
+    await alice.expect("msg:ack_server");
+    await alice.expect("msg:new");
+    await bob.expect("msg:new");
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "🔥", active: true });
+    const addForAlice = await alice.expect("reaction:update");
+    const addForBob = await bob.expect("reaction:update");
+
+    expect((addForAlice.data as any).messageId).toBe(msgId);
+    expect((addForAlice.data as any).emoji).toBe("🔥");
+    expect((addForAlice.data as any).active).toBe(true);
+    expect((addForAlice.data as any).userId).toBe("user_bob");
+    expect((addForBob.data as any).active).toBe(true);
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "🔥", active: false });
+    const removeForAlice = await alice.expect("reaction:update");
+    const removeForBob = await bob.expect("reaction:update");
+    expect((removeForAlice.data as any).active).toBe(false);
+    expect((removeForBob.data as any).active).toBe(false);
+
+    alice.close();
+    bob.close();
+  });
+
+  it("is idempotent for duplicate active=true clicks", async () => {
+    const alice = await joinedClient("alice", "room_general", "dev-react-a2");
+    const bob = await joinedClient("bob", "room_general", "dev-react-b2");
+
+    const msgId = `msg_react_idem_${nanoid(8)}`;
+    alice.send("msg:send", { roomId: "room_general", messageId: msgId, content: "idem" });
+    await alice.expect("msg:ack_server");
+    await alice.expect("msg:new");
+    await bob.expect("msg:new");
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "👍", active: true });
+    await alice.expect("reaction:update");
+    await bob.expect("reaction:update");
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "👍", active: true });
+    const noDuplicateForAlice = await alice.expectNoEvent("reaction:update", 1000);
+    const noDuplicateForBob = await bob.expectNoEvent("reaction:update", 1000);
+    expect(noDuplicateForAlice).toBe(true);
+    expect(noDuplicateForBob).toBe(true);
 
     alice.close();
     bob.close();

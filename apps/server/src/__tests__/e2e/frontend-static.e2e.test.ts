@@ -28,6 +28,8 @@ describe("frontend static shell", () => {
     expect(html.includes('id="auditList"')).toBe(true);
     expect(html.includes('id="createGroupBtn"')).toBe(true);
     expect(html.includes('id="createDmBtn"')).toBe(true);
+    expect(html.includes('id="composerEmojiBtn"')).toBe(true);
+    expect(html.includes('id="composerEmojiPicker"')).toBe(true);
   });
 
   it("serves modular JS and CSS assets", async () => {
@@ -40,7 +42,8 @@ describe("frontend static shell", () => {
       "/js/main.js",
       "/js/api/rest.js",
       "/js/ws/client.js",
-      "/js/ui/drawer.js"
+      "/js/ui/drawer.js",
+      "/js/util/emoji.js"
     ];
 
     for (const asset of assets) {

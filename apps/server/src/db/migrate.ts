@@ -64,6 +64,18 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS messages_room_server_ts_idx ON messages(room_id, server_ts, id);
 
+CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji),
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS message_reactions_message_idx ON message_reactions(message_id);
+
 CREATE TABLE IF NOT EXISTS delivery_receipts (
   message_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
@@ -163,6 +175,18 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS messages_room_server_ts_idx ON messages(room_id, server_ts, id);
+
+CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji),
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS message_reactions_message_idx ON message_reactions(message_id);
 
 CREATE TABLE IF NOT EXISTS delivery_receipts (
   message_id TEXT NOT NULL,
