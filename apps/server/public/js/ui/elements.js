@@ -30,6 +30,8 @@ export const els = {
   removedBanner: $("removedBanner"),
   composer: $("composer"),
   composerForm: $("composerForm"),
+  composerEmojiBtn: $("composerEmojiBtn"),
+  composerEmojiPicker: $("composerEmojiPicker"),
   messageInput: $("messageInput"),
   sendBtn: $("sendBtn"),
 
@@ -45,6 +47,7 @@ export const els = {
   membersList: $("membersList"),
 
   auditList: $("auditList"),
+  auditSummary: $("auditSummary"),
   loadAuditBtn: $("loadAuditBtn"),
 
   modalBackdrop: $("modalBackdrop")

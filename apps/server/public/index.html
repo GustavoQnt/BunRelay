@@ -6,7 +6,10 @@
     <title>BunRelay</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Silkscreen:wght@400;700&family=VT323&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles/tokens.css" />
     <link rel="stylesheet" href="/styles/base.css" />
     <link rel="stylesheet" href="/styles/layout.css" />
@@ -19,8 +22,20 @@
 
     <div id="loginOverlay" class="login-overlay">
       <form id="loginForm" class="login-card" autocomplete="off">
-        <div class="brand">Bun<b>Relay</b></div>
-        <div class="inline-note">Frontend modular vanilla JS + governanca de salas</div>
+        <div class="window-bar">
+          <span>SESSION AUTH</span>
+          <span class="window-dots">[ _ ] [ o ] [ x ]</span>
+        </div>
+
+        <pre class="ascii-logo ascii-logo--login" aria-hidden="true">
+ ____              ____      _
+| __ ) _   _ _ __ |  _ \ ___| | __ _ _   _
+|  _ \| | | | '_ \| |_) / _ \ |/ _` | | | |
+| |_) | |_| | | | |  _ <  __/ | (_| | |_| |
+|____/ \__,_|_| |_|_| \_\___|_|\__,_|\__, |
+                                      |___/</pre>
+
+        <div class="inline-note">Vanilla chat shell com governanca e pegada retro terminal.</div>
 
         <div class="form-row">
           <label for="usernameInput">Usuario</label>
@@ -43,22 +58,32 @@
     </div>
 
     <div id="app" class="app" hidden>
-      <aside id="sidebar" class="sidebar">
+      <aside id="sidebar" class="sidebar panel">
         <div class="sidebar-header">
-          <div class="brand">Bun<b>Relay</b></div>
+          <div class="window-bar window-bar--compact">
+            <span>BUNRELAY://NODE</span>
+            <span class="window-dots">[ 1 ][ 9 ][ 9 ][ 9 ]</span>
+          </div>
+
+          <pre class="ascii-logo ascii-logo--mini" aria-hidden="true">
+ ____  _   _ _   _
+| __ )| | | | \ | |
+|  _ \| | | |  \| |
+| |_) | |_| | |\  |
+|____/ \___/|_| \_|</pre>
           <div class="muted">chat em tempo real</div>
 
           <div class="user-card">
             <div id="userAvatar" class="avatar">--</div>
-            <div style="min-width: 0; flex: 1">
+            <div class="user-main">
               <div id="userName">-</div>
               <div id="userStatus" class="muted">online</div>
             </div>
-            <button id="logoutBtn" class="icon-btn" style="padding: 8px" title="Sair" type="button">Sair</button>
+            <button id="logoutBtn" class="icon-btn" title="Sair" type="button">Sair</button>
           </div>
         </div>
 
-        <div style="padding: 12px 12px 0" class="muted">Salas</div>
+        <div class="sidebar-label muted">Salas</div>
         <div id="roomList" class="sidebar-rooms"></div>
 
         <div class="sidebar-footer">
@@ -67,18 +92,22 @@
         </div>
       </aside>
 
-      <main class="main-pane">
+      <main class="main-pane panel">
         <header class="chat-header">
-          <div style="min-width: 0">
+          <div class="chat-header-main">
+            <div class="scanline-tag">CHAT://ACTIVE_NODE</div>
             <div id="chatRoomName">Nenhuma sala</div>
             <div id="chatRoomMeta" class="chat-meta">Selecione uma sala para iniciar</div>
           </div>
-          <div style="display: flex; gap: 8px">
+          <div class="chat-header-actions">
             <button id="membersToggle" class="btn" type="button">Gestao</button>
           </div>
         </header>
 
         <section id="chatEmpty" class="chat-empty">
+          <pre class="empty-ascii" aria-hidden="true">
+ [*] waiting for room packet...
+ > select/create a room to boot session</pre>
           <div>Selecione ou crie uma sala para comecar</div>
         </section>
 
@@ -88,14 +117,25 @@
           <div id="removedBanner" class="removed-banner hidden">Voce foi removido desta sala. O envio de mensagens foi bloqueado.</div>
           <div id="composer" class="composer">
             <form id="composerForm" class="composer-form">
+              <button
+                id="composerEmojiBtn"
+                class="icon-btn emoji-trigger"
+                type="button"
+                aria-label="Inserir emoji"
+                aria-expanded="false"
+                aria-controls="composerEmojiPicker"
+              >
+                :)
+              </button>
               <input id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off" />
               <button id="sendBtn" class="btn brand" type="submit">Enviar</button>
             </form>
+            <div id="composerEmojiPicker" class="emoji-picker hidden" role="dialog" aria-label="Seletor de emojis"></div>
           </div>
         </section>
       </main>
 
-      <aside id="drawer" class="drawer">
+      <aside id="drawer" class="drawer panel">
         <div class="drawer-tabs">
           <button id="tabMembers" class="tab-btn active" type="button">Membros</button>
           <button id="tabAudit" class="tab-btn" type="button">Auditoria</button>
@@ -105,7 +145,7 @@
           <section id="membersPanel" class="drawer-panel">
             <form id="addMemberForm" class="form-row">
               <label for="addMemberInput">Adicionar membro (username ou user_id)</label>
-              <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px">
+              <div class="inline-grid">
                 <input id="addMemberInput" placeholder="bob ou user_bob" />
                 <button id="addMemberBtn" class="btn" type="submit">Adicionar</button>
               </div>
@@ -116,6 +156,7 @@
 
           <section id="auditPanel" class="drawer-panel hidden">
             <div class="inline-note">Historico de governanca da sala ativa.</div>
+            <div id="auditSummary" class="audit-summary"></div>
             <div id="auditList"></div>
             <button id="loadAuditBtn" class="btn" type="button">Carregar mais</button>
           </section>
