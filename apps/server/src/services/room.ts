@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import type { Cursor } from "@bunrelay/shared";
 
 import { db } from "../db/index.ts";
-import { messages, readCursors, roomMembers, rooms, users } from "../db/schema.ts";
+import { messageReactions, messages, readCursors, roomMembers, rooms, users } from "../db/schema.ts";
 
 type RoomSummary = {
   id: string;
@@ -432,6 +432,50 @@ export async function getRoomSnapshot(_userId: string, roomId: string, cursor?: 
     .orderBy(asc(messages.serverTs), asc(messages.id))
     .limit(50);
 
+  const messageIds = latestMessages.map((message: any) => message.messageId);
+  const reactionsByMessage = new Map<string, Array<{ emoji: string; userId: string }>>();
+
+  if (messageIds.length > 0) {
+    const reactionRows = await db
+      .select({
+        messageId: messageReactions.messageId,
+        emoji: messageReactions.emoji,
+        userId: messageReactions.userId,
+        createdAt: messageReactions.createdAt
+      })
+      .from(messageReactions)
+      .where(inArray(messageReactions.messageId, messageIds))
+      .orderBy(asc(messageReactions.createdAt), asc(messageReactions.emoji), asc(messageReactions.userId));
+
+    const latestByMessageUser = new Map<string, Map<string, { emoji: string; createdAt: number }>>();
+
+    for (const reaction of reactionRows) {
+      if (!latestByMessageUser.has(reaction.messageId)) {
+        latestByMessageUser.set(reaction.messageId, new Map());
+      }
+
+      const byUser = latestByMessageUser.get(reaction.messageId)!;
+      const previous = byUser.get(reaction.userId);
+      if (!previous || previous.createdAt <= reaction.createdAt) {
+        byUser.set(reaction.userId, {
+          emoji: reaction.emoji,
+          createdAt: reaction.createdAt
+        });
+      }
+    }
+
+    for (const [messageId, byUser] of latestByMessageUser.entries()) {
+      const current = reactionsByMessage.get(messageId) ?? [];
+      for (const [userId, reaction] of byUser.entries()) {
+        current.push({
+          emoji: reaction.emoji,
+          userId
+        });
+      }
+      reactionsByMessage.set(messageId, current);
+    }
+  }
+
   const lastMessage = latestMessages[latestMessages.length - 1];
 
   return {
@@ -444,7 +488,10 @@ export async function getRoomSnapshot(_userId: string, roomId: string, cursor?: 
           ? { ts: member.cursorTs, messageId: member.cursorMsgId }
           : undefined
     })),
-    messages: latestMessages,
+    messages: latestMessages.map((message: any) => ({
+      ...message,
+      reactions: reactionsByMessage.get(message.messageId) ?? []
+    })),
     cursor: lastMessage ? { ts: lastMessage.ts, messageId: lastMessage.messageId } : cursor ?? null
   };
 }

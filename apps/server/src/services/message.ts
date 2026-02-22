@@ -1,15 +1,23 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 import type { Cursor } from "@bunrelay/shared";
 
 import { db } from "../db/index.ts";
-import { deliveryReceipts, messages, readCursors } from "../db/schema.ts";
+import { deliveryReceipts, messageReactions, messages, readCursors } from "../db/schema.ts";
 
 type PersistMessageInput = {
   roomId: string;
   senderId: string;
   messageId: string;
   content: string;
+};
+
+type SetReactionInput = {
+  roomId: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  active: boolean;
 };
 
 export async function persistMessage(input: PersistMessageInput) {
@@ -87,6 +95,129 @@ export async function markDelivered(params: {
   };
 }
 
+export async function setMessageReaction(input: SetReactionInput) {
+  const message = await db.query.messages.findFirst({
+    where: and(eq(messages.id, input.messageId), eq(messages.roomId, input.roomId))
+  });
+
+  if (!message) {
+    return null;
+  }
+
+  const existingRows = await db
+    .select({
+      emoji: messageReactions.emoji
+    })
+    .from(messageReactions)
+    .where(
+      and(
+      eq(messageReactions.messageId, input.messageId),
+      eq(messageReactions.userId, input.userId)
+      )
+    );
+
+  if (input.active) {
+    const hasSameReaction = existingRows.some((row: any) => row.emoji === input.emoji);
+
+    if (hasSameReaction && existingRows.length === 1) {
+      return {
+        changes: []
+      };
+    }
+
+    const now = Date.now();
+
+    if (hasSameReaction) {
+      const removed = existingRows.filter((row: any) => row.emoji !== input.emoji);
+      await db
+        .delete(messageReactions)
+        .where(
+          and(
+            eq(messageReactions.messageId, input.messageId),
+            eq(messageReactions.userId, input.userId),
+            ne(messageReactions.emoji, input.emoji)
+          )
+        );
+
+      return {
+        changes: removed.map((row: any) => ({
+          roomId: input.roomId,
+          messageId: input.messageId,
+          emoji: row.emoji,
+          userId: input.userId,
+          active: false,
+          ts: now
+        }))
+      };
+    }
+
+    await db.transaction(async (tx: any) => {
+      await tx
+        .delete(messageReactions)
+        .where(and(eq(messageReactions.messageId, input.messageId), eq(messageReactions.userId, input.userId)));
+
+      await tx.insert(messageReactions).values({
+        messageId: input.messageId,
+        userId: input.userId,
+        emoji: input.emoji,
+        createdAt: now
+      });
+    });
+
+    return {
+      changes: [
+        ...existingRows.map((row: any) => ({
+          roomId: input.roomId,
+          messageId: input.messageId,
+          emoji: row.emoji,
+          userId: input.userId,
+          active: false,
+          ts: now
+        })),
+        {
+          roomId: input.roomId,
+          messageId: input.messageId,
+          emoji: input.emoji,
+          userId: input.userId,
+          active: true,
+          ts: now
+        }
+      ]
+    };
+  }
+
+  const hasTargetReaction = existingRows.some((row: any) => row.emoji === input.emoji);
+  if (!hasTargetReaction) {
+    return {
+      changes: []
+    };
+  }
+
+  const ts = Date.now();
+  await db
+    .delete(messageReactions)
+    .where(
+      and(
+        eq(messageReactions.messageId, input.messageId),
+        eq(messageReactions.userId, input.userId),
+        eq(messageReactions.emoji, input.emoji)
+      )
+    );
+
+  return {
+    changes: [
+      {
+        roomId: input.roomId,
+        messageId: input.messageId,
+        emoji: input.emoji,
+        userId: input.userId,
+        active: false,
+        ts
+      }
+    ]
+  };
+}
+
 export async function upsertReadCursor(params: { roomId: string; userId: string; cursor: Cursor }) {
   const updatedAt = Date.now();
 
@@ -114,4 +245,3 @@ export async function upsertReadCursor(params: { roomId: string; userId: string;
     cursor: params.cursor
   };
 }
-

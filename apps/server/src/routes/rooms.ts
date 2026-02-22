@@ -164,6 +164,17 @@ export async function handleRoomsRoute(request: Request, url: URL): Promise<Resp
     }
 
     const created = await createOrGetDmRoom(auth.auth.userId, peerUserId);
+
+    if (created.created) {
+      void broadcastRoomMemberUpdate({
+        roomId: created.room.id,
+        userId: peerUserId,
+        action: "added",
+        role: "member",
+        actorUserId: auth.auth.userId
+      }).catch(() => {});
+    }
+
     return json(
       {
         room: created.room,
@@ -258,6 +269,19 @@ export async function handleRoomsRoute(request: Request, url: URL): Promise<Resp
       action: "room_created",
       metadata: { name: parsed.data.name, memberCount: created.memberIds.length }
     });
+
+    const invitedMemberIds = uniqueRequestedMembers.filter((memberId) => memberId !== auth.auth.userId);
+    void Promise.all(
+      invitedMemberIds.map((memberId) =>
+        broadcastRoomMemberUpdate({
+          roomId: created.room.id,
+          userId: memberId,
+          action: "added",
+          role: "member",
+          actorUserId: auth.auth.userId
+        })
+      )
+    ).catch(() => {});
 
     return json(
       {

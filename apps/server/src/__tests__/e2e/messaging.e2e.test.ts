@@ -205,6 +205,46 @@ describe("reaction:set", () => {
     alice.close();
     bob.close();
   });
+
+  it("replacing reaction keeps only one reaction per user/message", async () => {
+    const alice = await joinedClient("alice", "room_general", "dev-react-a3");
+    const bob = await joinedClient("bob", "room_general", "dev-react-b3");
+
+    const msgId = `msg_react_replace_${nanoid(8)}`;
+    alice.send("msg:send", { roomId: "room_general", messageId: msgId, content: "replace" });
+    await alice.expect("msg:ack_server");
+    await alice.expect("msg:new");
+    await bob.expect("msg:new");
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "👍", active: true });
+    await alice.expect("reaction:update");
+    await bob.expect("reaction:update");
+
+    bob.send("reaction:set", { roomId: "room_general", messageId: msgId, emoji: "❤️", active: true });
+    const removedPrev = await alice.expect("reaction:update");
+    const addedNew = await alice.expect("reaction:update");
+    await bob.expect("reaction:update");
+    await bob.expect("reaction:update");
+
+    expect((removedPrev.data as any).emoji).toBe("👍");
+    expect((removedPrev.data as any).active).toBe(false);
+    expect((addedNew.data as any).emoji).toBe("❤️");
+    expect((addedNew.data as any).active).toBe(true);
+
+    const carlos = await authenticatedClient("carlos", "dev-react-c3");
+    carlos.send("room:join", { roomId: "room_general" });
+    const snapshot = await carlos.expect("room:snapshot");
+    const messages = (snapshot.data as any).messages as any[];
+    const message = messages.find((item) => item.messageId === msgId);
+    const bobReactions = (message?.reactions || []).filter((entry: any) => entry.userId === "user_bob");
+
+    expect(bobReactions.length).toBe(1);
+    expect(bobReactions[0]?.emoji).toBe("❤️");
+
+    alice.close();
+    bob.close();
+    carlos.close();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { verifyAccessToken } from "../auth/jwt.ts";
 import { env } from "../config/env.ts";
 import { db } from "../db/index.ts";
 import { sessions } from "../db/schema.ts";
-import { markDelivered, persistMessage, upsertReadCursor } from "../services/message.ts";
+import { markDelivered, persistMessage, setMessageReaction, upsertReadCursor } from "../services/message.ts";
 import { isUserOnline, markOnline } from "../services/presence.ts";
 import { getRoomSnapshot, isRoomMember, roomExists } from "../services/room.ts";
 import { setTyping } from "../services/typing.ts";
@@ -159,7 +159,41 @@ async function handleMsgSend(socket: ServerSocket, event: Extract<ClientEvent, {
 
   if (persisted.isNew) {
     const { isNew: _, ...msg } = persisted;
-    await broadcastToRoom(event.data.roomId, "msg:new", msg);
+    await broadcastToRoom(event.data.roomId, "msg:new", {
+      ...msg,
+      reactions: []
+    });
+  }
+}
+
+async function handleReactionSet(socket: ServerSocket, event: Extract<ClientEvent, { type: "reaction:set" }>) {
+  if (!requireAuth(socket, event.id)) {
+    return;
+  }
+
+  if (!requireJoinedRoom(socket, event.data.roomId, event.id)) {
+    return;
+  }
+
+  const reaction = await setMessageReaction({
+    roomId: event.data.roomId,
+    messageId: event.data.messageId,
+    userId: socket.data.userId!,
+    emoji: event.data.emoji,
+    active: event.data.active
+  });
+
+  if (!reaction) {
+    sendError(socket, "NOT_FOUND", "message not found for room", event.id);
+    return;
+  }
+
+  if (reaction.changes.length === 0) {
+    return;
+  }
+
+  for (const change of reaction.changes) {
+    await broadcastToRoom(event.data.roomId, "reaction:update", change);
   }
 }
 
@@ -238,6 +272,9 @@ export async function routeClientEvent(socket: ServerSocket, event: ClientEvent,
       return;
     case "msg:send":
       await handleMsgSend(socket, event);
+      return;
+    case "reaction:set":
+      await handleReactionSet(socket, event);
       return;
     case "msg:delivered":
       await handleMsgDelivered(socket, event);
