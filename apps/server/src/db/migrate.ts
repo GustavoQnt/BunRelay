@@ -69,11 +69,25 @@ CREATE TABLE IF NOT EXISTS message_reactions (
   user_id TEXT NOT NULL,
   emoji TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  PRIMARY KEY (message_id, user_id, emoji),
+  PRIMARY KEY (message_id, user_id),
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+DELETE FROM message_reactions
+WHERE rowid IN (
+  SELECT older.rowid
+  FROM message_reactions older
+  JOIN message_reactions newer
+    ON newer.message_id = older.message_id
+   AND newer.user_id = older.user_id
+   AND (
+     newer.created_at > older.created_at OR
+     (newer.created_at = older.created_at AND newer.rowid > older.rowid)
+   )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS message_reactions_message_user_unique ON message_reactions(message_id, user_id);
 CREATE INDEX IF NOT EXISTS message_reactions_message_idx ON message_reactions(message_id);
 
 CREATE TABLE IF NOT EXISTS delivery_receipts (
@@ -181,11 +195,21 @@ CREATE TABLE IF NOT EXISTS message_reactions (
   user_id TEXT NOT NULL,
   emoji TEXT NOT NULL,
   created_at BIGINT NOT NULL,
-  PRIMARY KEY (message_id, user_id, emoji),
+  PRIMARY KEY (message_id, user_id),
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+DELETE FROM message_reactions older
+USING message_reactions newer
+WHERE older.message_id = newer.message_id
+  AND older.user_id = newer.user_id
+  AND (
+    newer.created_at > older.created_at OR
+    (newer.created_at = older.created_at AND newer.ctid > older.ctid)
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS message_reactions_message_user_unique ON message_reactions(message_id, user_id);
 CREATE INDEX IF NOT EXISTS message_reactions_message_idx ON message_reactions(message_id);
 
 CREATE TABLE IF NOT EXISTS delivery_receipts (

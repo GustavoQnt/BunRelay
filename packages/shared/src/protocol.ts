@@ -36,6 +36,13 @@ export const msgSendDataSchema = z.object({
   content: z.string().trim().min(1).max(4000)
 });
 
+export const reactionSetDataSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+  emoji: z.string().trim().min(1).max(32),
+  active: z.boolean()
+});
+
 export const msgDeliveredClientDataSchema = z.object({
   roomId: z.string().min(1),
   messageId: z.string().min(1)
@@ -65,6 +72,10 @@ export const clientEventSchema = z.discriminatedUnion("type", [
   baseEnvelope.extend({
     type: z.literal("msg:send"),
     data: msgSendDataSchema
+  }),
+  baseEnvelope.extend({
+    type: z.literal("reaction:set"),
+    data: reactionSetDataSchema
   }),
   baseEnvelope.extend({
     type: z.literal("msg:delivered"),
@@ -106,7 +117,15 @@ export const roomSnapshotMessageSchema = z.object({
   messageId: z.string().min(1),
   senderId: z.string().min(1),
   content: z.string().min(1),
-  ts: z.number().int().nonnegative()
+  ts: z.number().int().nonnegative(),
+  reactions: z
+    .array(
+      z.object({
+        emoji: z.string().min(1),
+        userId: z.string().min(1)
+      })
+    )
+    .default([])
 });
 
 export const roomSnapshotDataSchema = z.object({
@@ -125,6 +144,23 @@ export const msgNewDataSchema = z.object({
   messageId: z.string().min(1),
   senderId: z.string().min(1),
   content: z.string().min(1),
+  ts: z.number().int().nonnegative(),
+  reactions: z
+    .array(
+      z.object({
+        emoji: z.string().min(1),
+        userId: z.string().min(1)
+      })
+    )
+    .default([])
+});
+
+export const reactionUpdateDataSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+  emoji: z.string().min(1),
+  userId: z.string().min(1),
+  active: z.boolean(),
   ts: z.number().int().nonnegative()
 });
 
@@ -188,6 +224,10 @@ export const serverEventSchema = z.discriminatedUnion("type", [
   baseEnvelope.extend({
     type: z.literal("msg:new"),
     data: msgNewDataSchema
+  }),
+  baseEnvelope.extend({
+    type: z.literal("reaction:update"),
+    data: reactionUpdateDataSchema
   }),
   baseEnvelope.extend({
     type: z.literal("msg:delivered"),

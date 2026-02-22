@@ -107,7 +107,8 @@ export const messageReactions = sqliteTable(
     createdAt: integer("created_at", { mode: "number" }).notNull()
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    pk: primaryKey({ columns: [table.messageId, table.userId] }),
+    byMessageUserUnique: uniqueIndex("message_reactions_message_user_unique").on(table.messageId, table.userId),
     byMessageIdx: index("message_reactions_message_idx").on(table.messageId)
   })
 );

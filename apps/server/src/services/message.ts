@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Cursor } from "@bunrelay/shared";
 
@@ -104,76 +104,58 @@ export async function setMessageReaction(input: SetReactionInput) {
     return null;
   }
 
-  const existingRows = await db
+  const existingRow = await db
     .select({
-      emoji: messageReactions.emoji
+      emoji: messageReactions.emoji,
+      createdAt: messageReactions.createdAt
     })
     .from(messageReactions)
-    .where(
-      and(
+    .where(and(
       eq(messageReactions.messageId, input.messageId),
       eq(messageReactions.userId, input.userId)
-      )
-    );
+    ))
+    .limit(1);
+
+  const existing = existingRow[0] ?? null;
 
   if (input.active) {
-    const hasSameReaction = existingRows.some((row: any) => row.emoji === input.emoji);
-
-    if (hasSameReaction && existingRows.length === 1) {
+    if (existing?.emoji === input.emoji) {
       return {
         changes: []
       };
     }
 
     const now = Date.now();
-
-    if (hasSameReaction) {
-      const removed = existingRows.filter((row: any) => row.emoji !== input.emoji);
-      await db
-        .delete(messageReactions)
-        .where(
-          and(
-            eq(messageReactions.messageId, input.messageId),
-            eq(messageReactions.userId, input.userId),
-            ne(messageReactions.emoji, input.emoji)
-          )
-        );
-
-      return {
-        changes: removed.map((row: any) => ({
-          roomId: input.roomId,
-          messageId: input.messageId,
-          emoji: row.emoji,
-          userId: input.userId,
-          active: false,
-          ts: now
-        }))
-      };
-    }
-
-    await db.transaction(async (tx: any) => {
-      await tx
-        .delete(messageReactions)
-        .where(and(eq(messageReactions.messageId, input.messageId), eq(messageReactions.userId, input.userId)));
-
-      await tx.insert(messageReactions).values({
+    await db
+      .insert(messageReactions)
+      .values({
         messageId: input.messageId,
         userId: input.userId,
         emoji: input.emoji,
         createdAt: now
+      })
+      .onConflictDoUpdate({
+        target: [messageReactions.messageId, messageReactions.userId],
+        set: {
+          emoji: input.emoji,
+          createdAt: now
+        }
       });
-    });
 
     return {
       changes: [
-        ...existingRows.map((row: any) => ({
-          roomId: input.roomId,
-          messageId: input.messageId,
-          emoji: row.emoji,
-          userId: input.userId,
-          active: false,
-          ts: now
-        })),
+        ...(existing
+          ? [
+              {
+                roomId: input.roomId,
+                messageId: input.messageId,
+                emoji: existing.emoji,
+                userId: input.userId,
+                active: false,
+                ts: now
+              }
+            ]
+          : []),
         {
           roomId: input.roomId,
           messageId: input.messageId,
@@ -186,8 +168,7 @@ export async function setMessageReaction(input: SetReactionInput) {
     };
   }
 
-  const hasTargetReaction = existingRows.some((row: any) => row.emoji === input.emoji);
-  if (!hasTargetReaction) {
+  if (!existing || existing.emoji !== input.emoji) {
     return {
       changes: []
     };
