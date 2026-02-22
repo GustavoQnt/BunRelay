@@ -94,6 +94,24 @@ export const messages = pgTable(
   })
 );
 
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: text("emoji").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    byMessageIdx: index("message_reactions_message_idx").on(table.messageId)
+  })
+);
+
 export const deliveryReceipts = pgTable(
   "delivery_receipts",
   {
@@ -148,4 +166,3 @@ export const roomAuditLog = pgTable(
     roomTsIdx: index("room_audit_log_room_ts_idx").on(table.roomId, table.ts)
   })
 );
-

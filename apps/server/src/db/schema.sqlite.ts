@@ -94,6 +94,24 @@ export const messages = sqliteTable(
   })
 );
 
+export const messageReactions = sqliteTable(
+  "message_reactions",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: text("emoji").notNull(),
+    createdAt: integer("created_at", { mode: "number" }).notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    byMessageIdx: index("message_reactions_message_idx").on(table.messageId)
+  })
+);
+
 export const deliveryReceipts = sqliteTable(
   "delivery_receipts",
   {
@@ -148,4 +166,3 @@ export const roomAuditLog = sqliteTable(
     roomTsIdx: index("room_audit_log_room_ts_idx").on(table.roomId, table.ts)
   })
 );
-
