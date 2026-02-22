@@ -1,39 +1,110 @@
-@media (max-width: 1200px) {
+@media (max-width: 1320px) {
   .app {
-    grid-template-columns: 250px 1fr 300px;
+    grid-template-columns: 268px 1fr 320px;
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1040px) {
   .app {
-    grid-template-columns: 1fr;
+    grid-template-columns: 250px 1fr;
   }
 
-  .sidebar,
   .drawer {
     position: fixed;
-    top: 0;
-    bottom: 0;
-    width: min(92vw, 340px);
+    top: 14px;
+    bottom: 14px;
+    right: 14px;
+    width: min(94vw, 340px);
     z-index: 90;
+    transform: translateX(104%);
+    transition: transform 180ms ease;
   }
 
-  .sidebar {
-    left: 0;
-    transform: translateX(-102%);
-  }
-
-  .drawer {
-    right: 0;
-    transform: translateX(102%);
-  }
-
-  .sidebar.open,
   .drawer.open {
     transform: translateX(0);
   }
+}
 
-  .main-pane {
-    grid-column: 1;
+@media (max-width: 840px) {
+  body {
+    overflow: hidden;
+  }
+
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: 10px;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 34vh) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    min-height: 220px;
+    max-height: 34vh;
+  }
+
+  .messages {
+    padding: 14px;
+  }
+
+  .chat-header {
+    padding: 10px 12px;
+  }
+
+  .composer {
+    padding: 10px 12px 12px;
+  }
+
+  .emoji-picker,
+  .reaction-picker {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .chat-header-actions .btn {
+    padding-inline: 10px;
+  }
+
+  .audit-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-rooms {
+    min-height: 84px;
+  }
+}
+
+@media (max-width: 560px) {
+  .ascii-logo--mini {
+    display: none;
+  }
+
+  .login-card {
+    width: calc(100vw - 16px);
+    padding: 12px;
+  }
+
+  .ascii-logo--login {
+    font-size: 9px;
+  }
+
+  .room-item {
+    padding: 8px;
+  }
+
+  .room-preview {
+    display: none;
+  }
+
+  .message-row {
+    max-width: 96%;
+  }
+
+  .composer-form {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .emoji-picker,
+  .reaction-picker {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
