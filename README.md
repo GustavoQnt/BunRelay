@@ -5,82 +5,47 @@
 [![SonarQube](https://github.com/GustavoQnt/BunRelay/actions/workflows/sonarqube.yml/badge.svg)](https://github.com/GustavoQnt/BunRelay/actions/workflows/sonarqube.yml)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2FGustavoQnt%2Fbunrelay-2496ED?logo=docker&logoColor=white)](https://ghcr.io/GustavoQnt/bunrelay)
 [![Runtime](https://img.shields.io/badge/runtime-bun-000000?logo=bun)](https://bun.sh/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 
-Production-oriented realtime chat template built with Bun + native WebSocket + Drizzle.
+Open source realtime chat template built with Bun, native WebSocket, Drizzle, and practical production defaults.
 
-BunRelay is designed to be cloned and evolved into real products, not demo-only experiments:
+BunRelay is intentionally positioned as a `clone-or-fork` starting point for developers who want a serious chat baseline without framework lock-in.
 
-- Native `Bun.serve()` for HTTP + WS in one process.
-- Shared protocol contracts with Zod (`packages/shared`).
-- SQLite-first local dev and Postgres-ready deployment mode.
-- Auth stack with refresh token rotation + replay detection.
-- Built-in observability baseline (structured logs, request IDs, metrics endpoints).
+## Why BunRelay
 
-## Language
+- Native `Bun.serve()` handles HTTP and WebSocket in one process.
+- Shared protocol contracts with Zod live in `packages/shared`.
+- SQLite-first local setup keeps onboarding fast.
+- Postgres and Redis paths are already prepared for more realistic deployments.
+- Security and observability are built into the baseline, not bolted on later.
 
-- [English](#english)
-- [Portugues (PT-BR)](#portugues-pt-br)
+## Best For
 
-## English
+- Learning how a realtime chat backend can be structured on Bun.
+- Starting a new internal product or side project from a typed template.
+- Portfolio and architecture study around auth, rooms, presence, fanout, and ops.
+- Teams that want a minimal demo UI while keeping the backend serious.
 
-### Why BunRelay
+## Not For
 
-- Fast startup path: run local with SQLite and no Docker.
-- Clear migration path: switch to Postgres via environment variables.
-- Typed protocol boundaries: server/client event schemas in one shared package.
-- Practical security defaults: rate limits, payload caps, WS heartbeat/auth timeouts.
-- Operational baseline included: metrics for HTTP/WS/security and JSON logs.
+- Teams looking for a polished end-user chat product out of the box.
+- Projects that want a batteries-included frontend framework or design system.
+- A drop-in npm package to install into an existing app.
 
-### Architecture
-
-```text
-Client (browser/mobile/backend)
-  | REST (/auth/*, /rooms/*, /health, /ops/*)
-  | WS   (/ws)
-  v
-Bun.serve() entrypoint (apps/server/src/index.ts)
-  |-- REST routes (auth, rooms, health, metrics)
-  |-- WS handler/router (auth, room join, messaging, delivery, read, typing, presence)
-  |-- Services (message, room, presence, audit, pubsub)
-  |-- Auth/JWT middleware + session checks
-  v
-Drizzle ORM
-  |-- SQLite (default)
-  '-- Postgres (DB_DRIVER=postgres)
-  |
-Pub/Sub layer (optional)
-  |-- Redis channel fanout for multi-instance WS delivery
-  '-- Local-only fallback when REDIS_URL is not set
-```
-
-### Tech Stack
-
-| Area | Choice |
-|---|---|
-| Runtime | Bun |
-| HTTP + WS | Native `Bun.serve()` |
-| ORM | Drizzle ORM |
-| Database | SQLite / Postgres |
-| Validation | Zod |
-| Auth | JWT (`jose`) + hashed opaque refresh tokens |
-| Demo UI | Vanilla HTML/JS (`apps/server/public/index.html`) |
-
-### Features Implemented
+## What You Get
 
 - `POST /auth/login` and `POST /auth/refresh`
-- Refresh token rotation with reuse detection and session revocation
-- WS event flow: auth, room join, send/receive, delivered, read, typing, heartbeat
-- Optional Redis Pub/Sub fanout for multi-instance realtime delivery (local fallback without Redis)
-- Message idempotency via client `messageId`
-- Room-scoped presence and snapshots, including WS room member updates
-- Room creation and management APIs: DM/group creation, member add/remove, role change, ownership transfer
-- Group governance hardening with `owner` role and protected ownership flows
-- Room audit trail (`room_audit_log`) + paginated `GET /rooms/:roomId/audit`
-- HTTP + WS limits and defensive validation
-- Metrics endpoints: `GET /ops/metrics` (JSON) and `GET /ops/metrics.prom` (Prometheus format)
-- GitHub Actions for CI/CD and optional SonarQube scanning
+- Refresh token rotation with replay detection and session revocation
+- WebSocket auth, room join, send/receive, delivered, read, typing, and heartbeat flows
+- Room creation and governance APIs for DMs and groups
+- Room-scoped presence, membership sync, and audit trail
+- Optional Redis Pub/Sub fanout for multi-instance realtime delivery
+- Structured logs, request IDs, JSON metrics, and Prometheus metrics
+- GitHub Actions workflows for CI/CD and optional SonarQube scanning
 
-### Quickstart (SQLite mode)
+## Quickstart
+
+### SQLite mode
 
 ```bash
 bun install
@@ -106,19 +71,74 @@ Seed users:
 
 Password for all seeded users: `password123`
 
-### Docker Mode (Postgres + Redis)
+### Docker mode
 
 ```bash
 docker compose up --build
 ```
 
-The compose flow starts Postgres, Redis, and server, then runs:
+This starts Postgres, Redis, and the server in a more production-like local environment.
 
-- `bun run db:migrate`
-- `bun run db:seed`
-- `bun run start`
+## Try These Flows After Boot
 
-### Environment Variables
+1. Log in as `alice` and `bob` in separate browser windows.
+2. Join the seeded DM and send a few messages to inspect delivery and read events.
+3. Create a group, add a member, transfer ownership, and inspect the room audit endpoint.
+4. Open `GET /ops/metrics` to see HTTP, WS, and security counters move in real time.
+
+## Architecture
+
+```text
+Client (browser/mobile/backend)
+  | REST (/auth/*, /rooms/*, /health, /ops/*)
+  | WS   (/ws)
+  v
+Bun.serve() entrypoint (apps/server/src/index.ts)
+  |-- REST routes (auth, rooms, health, metrics)
+  |-- WS handler/router (auth, room join, messaging, delivery, read, typing, presence)
+  |-- Services (message, room, presence, audit, pubsub)
+  |-- Auth/JWT middleware + session checks
+  v
+Drizzle ORM
+  |-- SQLite (default)
+  '-- Postgres (DB_DRIVER=postgres)
+  |
+Pub/Sub layer (optional)
+  |-- Redis channel fanout for multi-instance WS delivery
+  '-- Local-only fallback when REDIS_URL is not set
+```
+
+## Tech Stack
+
+| Area | Choice |
+|---|---|
+| Runtime | Bun |
+| HTTP + WS | Native `Bun.serve()` |
+| ORM | Drizzle ORM |
+| Database | SQLite / Postgres |
+| Validation | Zod |
+| Auth | JWT (`jose`) + hashed opaque refresh tokens |
+| Demo UI | Vanilla HTML/JS (`apps/server/public/index.html`) |
+
+## Open Source Model
+
+- Source of truth is the repository itself.
+- Deep documentation is versioned under `docs/wiki/`.
+- BunRelay is meant to be cloned, adapted, and learned from.
+- The repository includes contribution, security, and collaboration guides for external contributors.
+
+## Documentation Map
+
+- API reference: `docs/api.md`
+- Wiki index: `docs/wiki/README.md`
+- Architecture deep dive: `docs/wiki/Architecture.md`
+- Deployment guide: `docs/wiki/Deployment.md`
+- Observability guide: `docs/wiki/Observability.md`
+- Security model: `docs/wiki/Security-Model.md`
+- Extension guide: `docs/wiki/Extending-BunRelay.md`
+- Design and roadmap context: `docs/plans/2026-02-20-bunrelay-design.md`
+
+## Environment Variables
 
 Defaults live in `apps/server/src/config/env.ts`, so `.env` is optional for local runs.
 
@@ -152,7 +172,7 @@ Copy-Item .env.example .env
 | `MESSAGE_MAX_CHARS` | `4000` | max message content length |
 | `TRACING_ENABLED` | `false` | enable tracing spans/context pipeline |
 | `TRACING_SERVICE_NAME` | `bunrelay-server` | service name attached to exported spans/log sink batches |
-| `TRACING_OTLP_HTTP_URL` | _empty_ | OTLP traces endpoint (example: `http://localhost:4318/v1/traces`) |
+| `TRACING_OTLP_HTTP_URL` | _empty_ | OTLP traces endpoint |
 | `TRACING_OTLP_HEADERS` | _empty_ | custom OTLP headers (`key=value,key2=value2`) |
 | `TRACING_SAMPLING_RATIO` | `1` | root span sampling ratio (`0..1`) |
 | `TRACING_EXPORT_BATCH_SIZE` | `64` | max spans per export batch |
@@ -165,7 +185,7 @@ Copy-Item .env.example .env
 | `LOG_SINK_TIMEOUT_MS` | `2500` | sink request timeout |
 | `LOG_SINK_BUFFER_MAX` | `2000` | in-memory sink buffer cap per endpoint |
 
-### Scripts
+## Scripts
 
 | Script | Command | Purpose |
 |---|---|---|
@@ -175,107 +195,25 @@ Copy-Item .env.example .env
 | `bun run db:seed` | `bun run --cwd apps/server db:seed` | load demo users/rooms |
 | `bun run typecheck` | root + shared typecheck | static type validation |
 | `bun run test` | `bun run --cwd apps/server test` | auth + e2e tests |
-| `bun run test:ui-smoke` | `node scripts/ui-smoke.mjs` | browser smoke (login, DM/group create, member governance, audit) |
+| `bun run test:ui-smoke` | `node scripts/ui-smoke.mjs` | browser smoke flow |
 | `bun run ci` | `typecheck + test` | local CI equivalent |
 
-### API and Protocol
-
-Detailed reference moved to `docs/api.md`:
-
-- REST endpoints and auth flow
-- WS event contract and sequencing
-- Error model and operational limits
-- Ready-to-run curl examples and troubleshooting hints
-
-### Security Model
-
-- JWT access tokens (`HS256`) with user + session identity.
-- Opaque refresh tokens stored as SHA-256 hashes.
-- Refresh replay detection revokes session.
-- Login rate limiting (`5/min` per IP + username outside tests).
-- WS auth timeout + heartbeat timeout + per-connection event throttling.
-- Payload size limits and strict Zod validation on REST and WS envelopes.
-- Group governance rules with owner/admin/member roles, protected owner transfer, and owner safety constraints.
-- Audit logging for room governance mutations (`room_created`, member add/remove, role updates, owner transfer).
-
-### Observability
-
-- Structured JSON logs (`ts`, `level`, `event`, context fields).
-- Automatic request correlation with `x-request-id`.
-- Trace correlation via W3C `traceparent` (ingress + response propagation on HTTP).
-- Optional OTLP/HTTP span export (`TRACING_OTLP_HTTP_URL`).
-- Optional external log sink fanout via batched HTTP JSON (`LOG_SINK_HTTP_URLS`).
-- HTTP counters: totals, status classes, route-level counters, avg latency.
-- WS counters: upgrades, active connections, in/out by event type, invalid payloads.
-- Security event counters exposed in JSON and Prometheus formats.
-
-### CI/CD
+## CI/CD
 
 - CI workflow: `.github/workflows/ci.yml`
 - CD workflow: `.github/workflows/cd.yml`
-- SonarQube workflow: `.github/workflows/sonarqube.yml` (runs only when required secrets/vars are present)
+- SonarQube workflow: `.github/workflows/sonarqube.yml`
 - Container publish target: `ghcr.io/GustavoQnt/bunrelay`
 
-### Roadmap (current pending items)
+## Contributing and Governance
 
-- GitHub repo hardening (required checks, branch protection, environment secrets)
-- Optional frontend productization (UX polish, reconnect/error states, accessibility QA)
+- Contributing guide: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- License: `LICENSE`
 
-## Portugues (PT-BR)
+## PT-BR Resumo
 
-### Resumo
+BunRelay e um template open source de chat em tempo real feito para aprendizado, portfolio e reutilizacao como base de produto. O foco e mostrar uma arquitetura enxuta, tipada e operavel com Bun, WebSocket nativo, auth, salas, observabilidade e caminho realista para Postgres e Redis.
 
-BunRelay e um template de chat em tempo real para acelerar times que querem sair rapido do prototipo e evoluir para algo operavel.
-
-Pontos fortes:
-
-- Backend Bun puro com HTTP + WebSocket no mesmo processo.
-- Contratos compartilhados com Zod.
-- Desenvolvimento local simples com SQLite.
-- Modo Postgres pronto para ambiente mais realista.
-- Modo multi-instancia opcional com Redis Pub/Sub.
-- Auth com refresh rotativo e deteccao de reuso.
-- Governanca de grupos com papel `owner` e transferencia de ownership.
-- Trilha de auditoria de mudancas de membros e ownership.
-- Observabilidade baseline pronta (logs JSON + metricas).
-
-### Inicio rapido
-
-```bash
-bun install
-bun run db:migrate
-bun run db:seed
-bun run dev
-```
-
-Endpoints uteis:
-
-- `http://localhost:3000/health`
-- `http://localhost:3000/ops/metrics`
-- `http://localhost:3000/ops/metrics.prom`
-
-Usuarios de seed: `alice`, `bob`, `carlos`, `diana`, `erin`
-
-Senha: `password123`
-
-### Docker + Postgres
-
-```bash
-docker compose up --build
-```
-
-### Variaveis de ambiente
-
-Copie:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-No minimo, altere `JWT_SECRET` para um valor forte fora de ambiente local.
-
-### Documentacao tecnica completa
-
-- API REST e protocolo WS: `docs/api.md`
-- Plano tecnico/roadmap: `docs/plans/2026-02-20-bunrelay-design.md`
-- Integracoes observability avancadas: OTLP traces + HTTP log sinks via `.env.example`
+Se voce quer subir rapido, estudar a estrutura e depois adaptar para seu proprio caso, este repo foi feito para isso.
